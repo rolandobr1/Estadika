@@ -1,10 +1,10 @@
 
 'use client';
-import { useState, useEffect, useMemo, Suspense } from 'react';
+import { useState, useEffect, useMemo, Suspense, useRef } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Download, ChevronsRight, Trash2, Search, ArrowLeft, RotateCcw } from "lucide-react";
+import { Download, ChevronsRight, Trash2, Search, ArrowLeft, RotateCcw, Upload } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
 import type { Game, PlayerStats, TeamInGame, GameAction } from '@/lib/types';
@@ -237,6 +237,7 @@ function HistoryContent() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
+  const importFileRef = useRef<HTMLInputElement>(null);
 
   const searchParams = useSearchParams();
   const gameIdToShow = searchParams.get('gameId');
@@ -315,49 +316,71 @@ function HistoryContent() {
       }
   }
 
-  const convertGameToCsv = (game: Game): string => {
-    const statOrder: (keyof PlayerStats)[] = ['PTS', 'REB', 'AST', 'STL', 'BLK', 'PF', '2PM', '2PA', '3PM', '3PA', '1PM', '1PA', 'TOV'];
-    const headers = ['teamName', 'playerId', 'playerName', 'playerNumber', ...statOrder];
-
-    const allPlayerStats = [
-        ...game.homeTeam.players.map(p => ({ ...p, teamName: game.homeTeam.name, stats: game.homeTeam.playerStats[p.id] })),
-        ...game.awayTeam.players.map(p => ({ ...p, teamName: game.awayTeam.name, stats: game.awayTeam.playerStats[p.id] })),
-    ];
-    
-    let csv = headers.join(',') + '\n';
-
-    allPlayerStats.forEach(playerData => {
-        const row = [
-            `"${playerData.teamName}"`,
-            playerData.id,
-            `"${playerData.name}"`,
-            playerData.number ?? '',
-            ...statOrder.map(stat => playerData.stats?.[stat] ?? 0)
-        ];
-        csv += row.join(',') + '\n';
-    });
-    
-    return csv;
-  };
-
   const handleExportGame = (game: Game) => {
-    const csvData = convertGameToCsv(game);
-    const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
+    const gameJson = JSON.stringify(game, null, 2);
+    const blob = new Blob([gameJson], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     const homeTeamName = game.homeTeam.name.replace(/\s/g, '_');
     const awayTeamName = game.awayTeam.name.replace(/\s/g, '_');
     a.href = url;
-    a.download = `partido_${homeTeamName}_vs_${awayTeamName}_${game.id}.csv`;
+    a.download = `partido_${homeTeamName}_vs_${awayTeamName}_${game.id}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     toast({
         title: 'Partido Exportado',
-        description: 'Las estadísticas del partido se han guardado en un archivo CSV.',
+        description: 'Los datos del partido se han guardado en un archivo JSON.',
     });
   };
+
+  const handleImportGame = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const content = e.target?.result as string;
+            const importedGame: Game = JSON.parse(content);
+
+            if (!importedGame.id || !importedGame.homeTeam || !importedGame.awayTeam || !importedGame.gameLog) {
+                throw new Error("El archivo no tiene el formato de partido correcto.");
+            }
+            
+            if (history.some(g => g.id === importedGame.id)) {
+                toast({
+                    title: "Importación Fallida",
+                    description: "Un partido con el mismo ID ya existe en el historial.",
+                    variant: "destructive"
+                });
+                return;
+            }
+            
+            const updatedHistory = [importedGame, ...history].sort((a,b) => b.date - a.date);
+            setHistory(updatedHistory);
+            localStorage.setItem('gameHistory', JSON.stringify(updatedHistory));
+
+            toast({
+                title: "Partido Importado",
+                description: `El partido ${importedGame.homeTeam.name} vs ${importedGame.awayTeam.name} ha sido añadido al historial.`
+            });
+
+        } catch (err) {
+            toast({
+                title: "Error al Importar",
+                description: "El archivo seleccionado no es un JSON de partido válido.",
+                variant: "destructive"
+            });
+        } finally {
+            if(importFileRef.current) {
+                importFileRef.current.value = "";
+            }
+        }
+    };
+    reader.readAsText(file);
+  }
 
   const handleResumeGame = (gameToResume: Game) => {
       // 1. Remove the game from the history
@@ -414,6 +437,10 @@ function HistoryContent() {
                     <Button asChild>
                         <Link href="/game/setup">Comenzar Nuevo Juego</Link>
                     </Button>
+                     <Button variant="outline" onClick={() => importFileRef.current?.click()}>
+                        <Upload className="mr-2 h-4 w-4" /> Importar Partido
+                    </Button>
+                    <input type="file" ref={importFileRef} className="hidden" accept=".json" onChange={handleImportGame} />
                 </CardContent>
             </Card>
         </div>
@@ -455,8 +482,8 @@ function HistoryContent() {
         )}
       </div>
       
-      <div className="mb-6">
-        <div className="relative">
+      <div className="mb-6 flex flex-col sm:flex-row gap-4">
+        <div className="relative flex-grow">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
                 placeholder="Buscar por equipo, nombre del partido o fecha..."
@@ -465,6 +492,10 @@ function HistoryContent() {
                 onChange={(e) => setSearchTerm(e.target.value)}
             />
         </div>
+        <Button variant="outline" onClick={() => importFileRef.current?.click()}>
+            <Upload className="mr-2 h-4 w-4" /> Importar Partido (JSON)
+        </Button>
+        <input type="file" ref={importFileRef} className="hidden" accept=".json" onChange={handleImportGame} />
       </div>
 
        <div className="border rounded-lg">
@@ -515,7 +546,7 @@ function HistoryContent() {
 
                     <div className="flex items-center justify-start md:justify-end gap-2 flex-wrap">
                        <Button variant="outline" size="sm" onClick={() => handleExportGame(game)}>
-                         <Download className="h-4 w-4 mr-2" /> Exportar
+                         <Download className="h-4 w-4 mr-2" /> Exportar (JSON)
                        </Button>
                         <AlertDialog>
                             <AlertDialogTrigger asChild>
@@ -581,3 +612,5 @@ export default function HistoryPage() {
         </Suspense>
     )
 }
+
+    
