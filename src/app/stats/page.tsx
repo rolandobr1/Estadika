@@ -231,14 +231,26 @@ const Schedule = ({ tournament, onUpdate }: { tournament: Tournament, onUpdate: 
             setIsStartingMatch(false);
             return;
         }
-
-        const appSettings = JSON.parse(localStorage.getItem('appSettings') || '{}');
-        const defaultGameSettings = appSettings.gameSettings || {};
         
+        const appSettingsString = localStorage.getItem('appSettings');
+        const appSettings = appSettingsString ? JSON.parse(appSettingsString) : {};
+
         const gameSettings: GameSettings = {
-            ...defaultGameSettings,
+            ...(appSettings.gameSettings || {}),
             ...tournament.gameSettings,
+            quarterLength: (tournament.gameSettings.quarterLength || appSettings.gameSettings.quarterLength || 10) * 60,
+            overtimeLength: (tournament.gameSettings.overtimeLength || appSettings.gameSettings.overtimeLength || 5) * 60,
             name: `${homeTournamentTeam.name} vs ${awayTournamentTeam.name} (${tournament.name})`,
+        };
+        
+        const getInitialTimeouts = () => {
+            const { timeoutSettings } = gameSettings;
+            switch (timeoutSettings.mode) {
+                case 'per_quarter': return timeoutSettings.timeoutsPerQuarter;
+                case 'per_half': return timeoutSettings.timeoutsFirstHalf;
+                case 'total': return timeoutSettings.timeoutsTotal;
+                default: return 2;
+            }
         };
 
         const createTeamInGame = (tournTeam: TournamentTeam, teamId: 'homeTeam' | 'awayTeam'): TeamInGame => ({
@@ -247,7 +259,7 @@ const Schedule = ({ tournament, onUpdate }: { tournament: Tournament, onUpdate: 
             players: tournTeam.players,
             stats: { 
                 score: 0, 
-                timeouts: 5, // This will be recalculated in the game screen
+                timeouts: getInitialTimeouts(),
                 foulsByQuarter: Array(gameSettings.quarters + 10).fill(0),
                 inBonus: false,
             },

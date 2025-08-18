@@ -459,7 +459,7 @@ export default function GameSetupPage() {
     
     return (
         <>
-            {isStartingGame && <LoadingModal />}
+            {isStartingGame && <LoadingModal text="Creando partido..." />}
             <div className="container mx-auto px-4 py-8">
                 <div className="mb-8">
                     <h1 className="text-3xl font-bold tracking-tight text-primary">Configuración del Partido</h1>
