@@ -45,7 +45,7 @@ export function Header() {
           <Link href="/" className="mr-6 flex items-center space-x-2">
             <RiBasketballLine className="h-6 w-6 text-primary" />
             <span className="hidden font-bold sm:inline-block">
-              Estadika
+              App de Basket
             </span>
           </Link>
           <nav className="flex items-center space-x-6 text-sm font-medium">
@@ -57,7 +57,7 @@ export function Header() {
         <div className="flex w-full items-center justify-between md:hidden">
            <Link href="/" className="flex items-center space-x-2">
              <RiBasketballLine className="h-6 w-6 text-primary" />
-             <span className="font-bold text-lg">Estadika</span>
+             <span className="font-bold text-lg">App de Basket</span>
            </Link>
            <Sheet open={isMobileMenuOpen} onOpenChange={setMobileMenuOpen}>
             <SheetTrigger asChild>
@@ -70,7 +70,7 @@ export function Header() {
                 <SheetHeader className="p-4 border-b">
                      <SheetTitle className="flex items-center gap-2">
                         <RiBasketballLine className="h-6 w-6 text-primary" />
-                        <span className="font-bold text-xl">Estadika</span>
+                        <span className="font-bold text-xl">App de Basket</span>
                      </SheetTitle>
                 </SheetHeader>
                 <nav className="grid gap-2 p-4">
