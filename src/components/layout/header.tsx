@@ -4,11 +4,11 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { BasketballIcon } from '@/components/icons/basketball';
 import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '../ui/sheet';
 import { Menu, Home, Users, History, Settings, Trophy } from 'lucide-react';
 import { useState } from 'react';
+import { RiBasketballLine } from 'react-icons/ri';
 
 const navLinks = [
   { href: '/', label: 'Inicio', icon: Home },
@@ -43,7 +43,7 @@ export function Header() {
         {/* Desktop Navigation */}
         <div className="mr-4 hidden md:flex md:flex-1">
           <Link href="/" className="mr-6 flex items-center space-x-2">
-            <BasketballIcon className="h-6 w-6 text-primary" />
+            <RiBasketballLine className="h-6 w-6 text-primary" />
             <span className="hidden font-bold sm:inline-block">
               Estadika
             </span>
@@ -56,7 +56,7 @@ export function Header() {
         {/* Mobile Navigation */}
         <div className="flex w-full items-center justify-between md:hidden">
            <Link href="/" className="flex items-center space-x-2">
-             <BasketballIcon className="h-6 w-6 text-primary" />
+             <RiBasketballLine className="h-6 w-6 text-primary" />
              <span className="font-bold text-lg">Estadika</span>
            </Link>
            <Sheet open={isMobileMenuOpen} onOpenChange={setMobileMenuOpen}>
@@ -69,7 +69,7 @@ export function Header() {
             <SheetContent side="right" className="w-[300px] sm:w-[340px]">
                 <SheetHeader className="p-4 border-b">
                      <SheetTitle className="flex items-center gap-2">
-                        <BasketballIcon className="h-6 w-6 text-primary" />
+                        <RiBasketballLine className="h-6 w-6 text-primary" />
                         <span className="font-bold text-xl">Estadika</span>
                      </SheetTitle>
                 </SheetHeader>

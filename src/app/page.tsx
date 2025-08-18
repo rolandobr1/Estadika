@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 import { BarChart3, Trophy, Users, Zap } from 'lucide-react';
 import type { Game } from '@/lib/types';
 import { cn } from '@/lib/utils';
-import { BasketballIcon } from '@/components/icons/basketball';
+import { RiBasketballLine } from "react-icons/ri";
 
 const MenuButton = ({
   href,
@@ -110,7 +110,7 @@ export default function Home() {
         <div className="w-full max-w-sm animate-slide-up rounded-2xl bg-card/95 p-10 py-12 text-center shadow-lg backdrop-blur-lg">
           <div className="mb-10">
             <div className="relative mx-auto mb-5 flex h-[72px] w-[72px] items-center justify-center rounded-full bg-gradient-to-br from-slate-600 to-slate-800 shadow-md">
-                <BasketballIcon className="h-8 w-8 text-white"/>
+                <RiBasketballLine className="h-8 w-8 text-white"/>
             </div>
             <h1 className="text-3xl font-bold tracking-tight text-slate-800">CourtVision Stats</h1>
             <p className="mt-2 text-base text-slate-500">Tu asistente de baloncesto todo en uno.</p>
