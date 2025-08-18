@@ -322,51 +322,11 @@ export default function CreateTournamentPage() {
         <div className="space-y-6 sticky top-8">
            <Card>
             <CardHeader>
-              <CardTitle>Formato (Temporada Regular)</CardTitle>
+              <CardTitle>Ajustes del Partido</CardTitle>
+               <CardDescription>Reglas que se aplicarán a todos los partidos del torneo.</CardDescription>
             </CardHeader>
              <CardContent className="space-y-6">
-                <div className="space-y-3">
-                    <Label className="font-semibold">Formato</Label>
-                    <RadioGroup
-                        value={tournamentFormat}
-                        onValueChange={(value) => setTournamentFormat(value as TournamentFormat)}
-                    >
-                        <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="round-robin" id="round-robin" />
-                            <Label htmlFor="round-robin" className="cursor-pointer">Round Robin (Todos contra todos)</Label>
-                        </div>
-                    </RadioGroup>
-                </div>
-                <div className="space-y-3">
-                      <Label className="font-semibold">Vueltas</Label>
-                      <RadioGroup
-                        value={tournamentRounds}
-                        onValueChange={(value) => setTournamentRounds(value)}
-                        className="flex gap-4"
-                    >
-                        <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="1" id="r1" />
-                            <Label htmlFor="r1" className="cursor-pointer">1 Vuelta</Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="2" id="r2" />
-                            <Label htmlFor="r2" className="cursor-pointer">2 Vueltas</Label>
-                        </div>
-                    </RadioGroup>
-                    <p className="text-xs text-muted-foreground">
-                        "Vueltas" define cuántas veces juega cada equipo contra todos los demás. "2 Vueltas" es un formato de ida y vuelta.
-                    </p>
-                </div>
-            </CardContent>
-          </Card>
-          
-           <Card>
-                <CardHeader>
-                    <CardTitle>Ajustes del Partido</CardTitle>
-                    <CardDescription>Reglas que se aplicarán a todos los partidos del torneo.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                         <GameSettingInput label="Nº de Cuartos" value={gameSettings.quarters} onChange={val => handleSettingChange('quarters', val)} min={1} />
                         <GameSettingInput label="Duración Cuarto (min)" value={gameSettings.quarterLength} onChange={val => handleSettingChange('quarterLength', val)} min={1} />
                     </div>
@@ -394,18 +354,20 @@ export default function CreateTournamentPage() {
                                     <Label htmlFor="t-total" className="cursor-pointer">Total</Label>
                                 </div>
                             </RadioGroup>
-                        <div className={cn("transition-opacity pt-4", gameSettings.timeoutSettings.mode !== 'per_quarter' && 'opacity-50')}>
+
+                        <div className={cn("transition-opacity pt-4", gameSettings.timeoutSettings.mode !== 'per_quarter' && 'opacity-0 h-0 overflow-hidden')}>
                             <GameSettingInput label="Tiempos por Cuarto" value={gameSettings.timeoutSettings.timeoutsPerQuarter} onChange={val => handleTimeoutSettingChange('timeoutsPerQuarter', val)} disabled={gameSettings.timeoutSettings.mode !== 'per_quarter'} />
                         </div>
-                        <div className={cn("transition-opacity pt-4 grid grid-cols-2 gap-4", gameSettings.timeoutSettings.mode !== 'per_half' && 'opacity-50')}>
+                        <div className={cn("transition-opacity pt-4 grid grid-cols-2 gap-4", gameSettings.timeoutSettings.mode !== 'per_half' && 'opacity-0 h-0 overflow-hidden')}>
                             <GameSettingInput label="Tiempos (1ª Mitad)" value={gameSettings.timeoutSettings.timeoutsFirstHalf} onChange={val => handleTimeoutSettingChange('timeoutsFirstHalf', val)} disabled={gameSettings.timeoutSettings.mode !== 'per_half'} />
                             <GameSettingInput label="Tiempos (2ª Mitad)" value={gameSettings.timeoutSettings.timeoutsSecondHalf} onChange={val => handleTimeoutSettingChange('timeoutsSecondHalf', val)} disabled={gameSettings.timeoutSettings.mode !== 'per_half'} />
                         </div>
-                        <div className={cn("transition-opacity pt-4", gameSettings.timeoutSettings.mode !== 'total' && 'opacity-50')}>
+                        <div className={cn("transition-opacity pt-4", gameSettings.timeoutSettings.mode !== 'total' && 'opacity-0 h-0 overflow-hidden')}>
                             <GameSettingInput label="Tiempos Totales" value={gameSettings.timeoutSettings.timeoutsTotal} onChange={val => handleTimeoutSettingChange('timeoutsTotal', val)} disabled={gameSettings.timeoutSettings.mode !== 'total'} />
                         </div>
+
                         <div className="pt-4">
-                            <GameSettingInput label="Tiempos (Prórroga)" value={gameSettings.timeoutsOvertime} onChange={val => handleGameSettingChange('timeoutsOvertime', val)} />
+                            <GameSettingInput label="Tiempos (Prórroga)" value={gameSettings.timeoutsOvertime} onChange={val => handleSettingChange('timeoutsOvertime', val)} />
                         </div>
                     </div>
 
@@ -445,12 +407,12 @@ export default function CreateTournamentPage() {
                             <GameSettingInput label="Nº F. Técnicas para Expulsión" value={gameSettings.technicalFoulsToFoulOut} onChange={val => handleSettingChange('technicalFoulsToFoulOut', val)} disabled={!gameSettings.allowTechnicalFoulOut} min={1} />
                         </div>
                     </div>
-                </CardContent>
-            </Card>
-
-            <Card>
+            </CardContent>
+          </Card>
+          
+           <Card>
                 <CardHeader>
-                    <CardTitle>Configuración de Playoffs</CardTitle>
+                    <CardTitle>Formato de Playoffs</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                      <div className="flex items-center space-x-2">
@@ -500,3 +462,4 @@ export default function CreateTournamentPage() {
     </div>
   );
 }
+
