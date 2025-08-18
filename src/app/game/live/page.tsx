@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import type { Game, Player, TeamInGame, StatType, PlayerStats, GameAction, AppSettings } from '@/lib/types';
 import { defaultAppSettings } from '@/lib/types';
-import { createInitialGame, recalculateGameStateFromLog } from '@/lib/game-utils';
+import { createInitialGame, recalculateGameStateFromLog, applyActionToGameState } from '@/lib/game-utils';
 import { cn } from '@/lib/utils';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
@@ -46,7 +46,18 @@ function gameReducer(state: Game, action: GameAction): Game {
     if (state.status === 'FINISHED' && !['GAME_END', 'GAME_START', 'REOPEN_GAME'].includes(action.type)) {
         return state;
     }
+    
+    // For actions that should be calculated incrementally on the current state
+    const incrementalActions: ActionType[] = [
+        'SCORE_UPDATE', 'STAT_UPDATE', 'TIMEOUT', 'SUBSTITUTION', 'ADD_PLAYER_TO_COURT',
+        'QUARTER_CHANGE', 'MANUAL_TIMER_ADJUST', 'SET_TIMER'
+    ];
 
+    if (incrementalActions.includes(action.type)) {
+        return applyActionToGameState(state, action);
+    }
+
+    // For other actions, handle them with the existing logic
     switch (action.type) {
         case 'GAME_START':
             return produce(state, draft => {
@@ -110,78 +121,6 @@ function gameReducer(state: Game, action: GameAction): Game {
 
             // Recalculate to ensure everything is consistent after removing the end action
             return recalculateGameStateFromLog(nextState, nextState.gameLog);
-        }
-        
-        case 'SCORE_UPDATE':
-        case 'STAT_UPDATE': {
-            const nextState = produce(state, draft => {
-                draft.gameLog.push(action);
-            });
-            return recalculateGameStateFromLog(nextState, nextState.gameLog);
-        }
-            
-        case 'SUBSTITUTION':
-             return produce(state, draft => {
-                const { teamId, playerInId, playerOutId } = action.payload;
-                if (!teamId || !playerInId || !playerOutId) return;
-                const team = draft[teamId];
-                const onCourtIndex = team.playersOnCourt.indexOf(playerOutId);
-                if (onCourtIndex !== -1) {
-                    team.playersOnCourt.splice(onCourtIndex, 1, playerInId);
-                    draft.gameLog.push(action);
-                }
-            });
-
-        case 'ADD_PLAYER_TO_COURT':
-            return produce(state, draft => {
-                const { teamId, playerInId } = action.payload;
-                if (!teamId || !playerInId) return;
-                const team = draft[teamId];
-                if (team.playersOnCourt.length < 5 && !team.playersOnCourt.includes(playerInId)) {
-                    team.playersOnCourt.push(playerInId);
-                    draft.gameLog.push(action);
-                }
-            });
-        
-        case 'MANUAL_TIMER_ADJUST':
-            return produce(state, draft => {
-                draft.gameClock = Math.max(0, draft.gameClock + action.payload.timeAdjustment!);
-                draft.gameLog.push(action);
-            });
-        case 'SET_TIMER': 
-            return produce(state, draft => {
-                draft.gameClock = action.payload.newTime!;
-                draft.gameLog.push(action);
-            });
-
-        case 'QUARTER_CHANGE':{
-             const nextState = produce(state, draft => {
-                draft.clockIsRunning = false;
-                draft.gameLog.push(action);
-             });
-             return recalculateGameStateFromLog(nextState, nextState.gameLog);
-        }
-        
-        case 'TIMEOUT': {
-            return produce(state, draft => {
-                if (draft.isTimeoutActive) {
-                    draft.isTimeoutActive = false;
-                    draft.timeoutCaller = undefined;
-                    draft.clockIsRunning = true;
-                    return;
-                }
-                
-                const teamId = action.payload.teamId!;
-                const team = draft[teamId];
-                if (team.stats.timeouts > 0) {
-                    team.stats.timeouts--;
-                    draft.clockIsRunning = false;
-                    draft.isTimeoutActive = true;
-                    draft.timeoutClock = draft.settings.timeoutLength;
-                    draft.timeoutCaller = teamId;
-                    draft.gameLog.push(action);
-                }
-            });
         }
         
         case 'UNDO_LAST_ACTION': {
