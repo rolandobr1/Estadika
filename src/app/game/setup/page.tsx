@@ -1,0 +1,535 @@
+
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
+import { Users, FileDown, ArrowRight, AlertTriangle, Minus, Plus } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { useToast } from '@/hooks/use-toast';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Skeleton } from '@/components/ui/skeleton';
+
+import type { Player, Team, Game, TeamInGame, PlayerStats, GameSettings, AppSettings } from '@/lib/types';
+import { defaultAppSettings } from '@/lib/types';
+import { cn } from '@/lib/utils';
+import { LoadingModal } from '@/components/ui/loader';
+
+// Helper function to create a clean slate for player stats
+const createInitialPlayerStats = (): PlayerStats => ({
+    '1PM': 0, '1PA': 0, '2PM': 0, '2PA': 0, '3PM': 0, '3PA': 0,
+    REB: 0, DREB: 0, OREB: 0, AST: 0, STL: 0, BLK: 0, TOV: 0, PF: 0, UF: 0, TF: 0, PTS: 0
+});
+
+const PlayerSelectionModal = ({
+    isOpen,
+    onClose,
+    onConfirm,
+    allPlayers,
+    unavailablePlayerIds = [],
+    initialSelectedIds = []
+}: {
+    isOpen: boolean,
+    onClose: () => void,
+    onConfirm: (selectedPlayers: Player[]) => void,
+    allPlayers: Player[],
+    unavailablePlayerIds: string[],
+    initialSelectedIds: string[],
+}) => {
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(initialSelectedIds));
+    const [searchTerm, setSearchTerm] = useState('');
+
+    useEffect(() => {
+        if (isOpen) {
+            setSelectedIds(new Set(initialSelectedIds));
+        }
+    }, [initialSelectedIds, isOpen]);
+
+    const handleTogglePlayer = (playerId: string) => {
+        setSelectedIds(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(playerId)) {
+                newSet.delete(playerId);
+            } else {
+                newSet.add(playerId);
+            }
+            return newSet;
+        });
+    };
+
+    const handleConfirm = () => {
+        const selectedPlayers = allPlayers.filter(p => selectedIds.has(p.id));
+        onConfirm(selectedPlayers);
+        onClose();
+    };
+
+    const filteredPlayers = allPlayers.filter(p => 
+        p.name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    return (
+        <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+            <DialogContent className="max-w-md">
+                <DialogHeader>
+                    <DialogTitle>Seleccionar Jugadores</DialogTitle>
+                    <DialogDescription>Elige los jugadores que participarán en el partido.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                    <Input 
+                        placeholder="Buscar jugador..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                    <ScrollArea className="h-72 rounded-md border">
+                        <div className="p-4">
+                            {filteredPlayers.map(player => {
+                                const isUnavailable = unavailablePlayerIds.includes(player.id) && !selectedIds.has(player.id);
+                                return (
+                                    <div key={player.id} className={cn("flex items-center space-x-3 p-3 mb-2 rounded-md", !isUnavailable && "hover:bg-muted/50")}>
+                                        <Checkbox
+                                            id={`player-sel-${player.id}`}
+                                            checked={selectedIds.has(player.id)}
+                                            onCheckedChange={() => handleTogglePlayer(player.id)}
+                                            disabled={isUnavailable}
+                                        />
+                                        <Label htmlFor={`player-sel-${player.id}`} className={cn("w-full", isUnavailable ? "text-muted-foreground line-through" : "cursor-pointer")}>
+                                            #{player.number || '-'} {player.name}
+                                            {isUnavailable && <span className="text-xs"> (En otro equipo)</span>}
+                                        </Label>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </ScrollArea>
+                </div>
+                <DialogFooter>
+                    <DialogClose asChild>
+                        <Button type="button" variant="ghost">Cancelar</Button>
+                    </DialogClose>
+                    <Button onClick={handleConfirm}>Confirmar Selección ({selectedIds.size})</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+};
+
+
+const LoadTeamModal = ({
+    isOpen,
+    onClose,
+    onLoad,
+    teams,
+    unavailableTeamId
+}: {
+    isOpen: boolean,
+    onClose: () => void,
+    onLoad: (team: Team) => void,
+    teams: Team[],
+    unavailableTeamId?: string
+}) => {
+    const availableTeams = teams.filter(t => t.id !== unavailableTeamId);
+
+    return (
+        <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Cargar Equipo Predefinido</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-2 py-4">
+                    {availableTeams.length > 0 ? availableTeams.map(team => (
+                        <Button
+                            key={team.id}
+                            variant="outline"
+                            className="w-full justify-start"
+                            onClick={() => {
+                                onLoad(team);
+                                onClose();
+                            }}
+                        >
+                            <Users className="mr-2 h-4 w-4" /> {team.name} ({team.playerIds.length} jugadores)
+                        </Button>
+                    )) : (
+                        <p className="text-muted-foreground text-center">No hay otros equipos guardados para cargar.</p>
+                    )}
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+export default function GameSetupPage() {
+    const router = useRouter();
+    const { toast } = useToast();
+
+    // Data from localStorage
+    const [roster, setRoster] = useState<Player[]>([]);
+    const [teams, setTeams] = useState<Team[]>([]);
+    
+    // Page State
+    const [homeTeamName, setHomeTeamName] = useState('Local');
+    const [awayTeamName, setAwayTeamName] = useState('Visitante');
+    const [homeTeamId, setHomeTeamId] = useState<string | undefined>();
+    const [awayTeamId, setAwayTeamId] = useState<string | undefined>();
+    const [homePlayers, setHomePlayers] = useState<Player[]>([]);
+    const [awayPlayers, setAwayPlayers] = useState<Player[]>([]);
+
+    const [gameSettings, setGameSettings] = useState<GameSettings>(defaultAppSettings.gameSettings);
+    
+    const [isHomeSelectionOpen, setIsHomeSelectionOpen] = useState(false);
+    const [isAwaySelectionOpen, setIsAwaySelectionOpen] = useState(false);
+    const [isHomeLoadOpen, setIsHomeLoadOpen] = useState(false);
+    const [isAwayLoadOpen, setIsAwayLoadOpen] = useState(false);
+
+    const [error, setError] = useState<string | null>(null);
+    const [gameInProgress, setGameInProgress] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isStartingGame, setIsStartingGame] = useState(false);
+    
+    useEffect(() => {
+        if (typeof window === 'undefined') {
+            setIsLoading(false);
+            return;
+        }
+        
+        const liveGame = localStorage.getItem('liveGame');
+        if (liveGame) {
+            setGameInProgress(true);
+            setIsLoading(false);
+            return;
+        }
+
+        const storedPlayers = localStorage.getItem('players');
+        const storedTeams = localStorage.getItem('teams');
+        const storedSettings = localStorage.getItem('appSettings');
+
+        if (storedPlayers) setRoster(JSON.parse(storedPlayers));
+        if (storedTeams) setTeams(JSON.parse(storedTeams));
+        if (storedSettings) {
+            try {
+                const parsedSettings: AppSettings = JSON.parse(storedSettings);
+                 setGameSettings(prev => ({ 
+                    ...prev, 
+                    ...(parsedSettings.gameSettings || {})
+                }));
+            } catch (e) {
+                console.error("Could not parse app settings", e);
+            }
+        }
+        setIsLoading(false);
+    }, []);
+    
+    const handleLoadTeam = (team: Team, teamType: 'home' | 'away') => {
+        const teamPlayers = roster.filter(p => team.playerIds.includes(p.id));
+
+        if (teamType === 'home') {
+            setHomeTeamName(team.name);
+            setHomeTeamId(team.id);
+            // Exclude players already in the away team
+            const awayPlayerIds = new Set(awayPlayers.map(p => p.id));
+            const filteredPlayers = teamPlayers.filter(p => !awayPlayerIds.has(p.id));
+            setHomePlayers(filteredPlayers);
+
+        } else {
+            setAwayTeamName(team.name);
+            setAwayTeamId(team.id);
+            // Exclude players already in the home team
+            const homePlayerIds = new Set(homePlayers.map(p => p.id));
+            const filteredPlayers = teamPlayers.filter(p => !homePlayerIds.has(p.id));
+            setAwayPlayers(filteredPlayers);
+        }
+    };
+
+     const handleSettingChange = (field: keyof GameSettings, value: number | string | boolean) => {
+        if (typeof value === 'number' && value < 0) return;
+        setGameSettings(prev => ({...prev, [field]: value}));
+    };
+    
+    const handleStartGame = () => {
+        if (typeof window !== 'undefined' && localStorage.getItem('liveGame')) {
+            setGameInProgress(true);
+            return;
+        }
+        if (homePlayers.length < 1 || awayPlayers.length < 1) {
+            setError("Ambos equipos deben tener al menos un jugador seleccionado.");
+            return;
+        }
+
+        // Check for duplicate players across teams
+        const homePlayerIds = new Set(homePlayers.map(p => p.id));
+        const duplicate = awayPlayers.find(p => homePlayerIds.has(p.id));
+        if (duplicate) {
+            setError(`El jugador "${duplicate.name}" no puede estar en ambos equipos.`);
+            return;
+        }
+
+        setIsStartingGame(true);
+
+        const createTeamInGame = (id: string, name: string, players: Player[], quarters: number): TeamInGame => ({
+            id,
+            name,
+            players,
+            stats: { 
+                score: 0, 
+                timeouts: 0, 
+                foulsByQuarter: Array(quarters + 10).fill(0), // Allow for many overtimes
+                inBonus: false,
+            },
+            playerStats: players.reduce((acc, player) => {
+                acc[player.id] = createInitialPlayerStats();
+                return acc;
+            }, {} as Record<string, PlayerStats>),
+            // First 5 are on court, the rest on the bench
+            playersOnCourt: players.slice(0, 5).map(p => p.id),
+        });
+
+        // All good, create the game object
+        const finalSettings = {
+            ...gameSettings,
+            quarterLength: gameSettings.quarterLength * 60, // convert minutes to seconds
+            overtimeLength: gameSettings.overtimeLength * 60,
+        };
+        
+        const getInitialTimeouts = () => {
+            const { timeoutSettings } = finalSettings;
+            switch (timeoutSettings.mode) {
+                case 'per_quarter': return timeoutSettings.timeoutsPerQuarter;
+                case 'per_half': return timeoutSettings.timeoutsFirstHalf;
+                case 'total': return timeoutSettings.timeoutsTotal;
+                default: return 0;
+            }
+        };
+
+        const initialTimeouts = getInitialTimeouts();
+
+        const newGame: Game = {
+            id: `game_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+            date: Date.now(),
+            homeTeam: createTeamInGame('homeTeam', homeTeamName, homePlayers, finalSettings.quarters),
+            awayTeam: createTeamInGame('awayTeam', awayTeamName, awayPlayers, finalSettings.quarters),
+            gameLog: [],
+            status: 'IN_PROGRESS',
+            currentQuarter: 1,
+            gameClock: finalSettings.quarterLength,
+            clockIsRunning: false,
+            isTimeoutActive: false,
+            timeoutClock: finalSettings.timeoutLength,
+            settings: finalSettings
+        };
+
+        newGame.homeTeam.stats.timeouts = initialTimeouts;
+        newGame.awayTeam.stats.timeouts = initialTimeouts;
+
+        localStorage.setItem('liveGame', JSON.stringify(newGame));
+        toast({
+            title: "¡Partido Creado!",
+            description: "Todo listo. ¡Que comience el juego!",
+        });
+        router.push('/game/live');
+    };
+
+    const TeamCard = ({ side }: { side: 'home' | 'away' }) => {
+        const isHome = side === 'home';
+        const teamName = isHome ? homeTeamName : awayTeamName;
+        const setTeamName = isHome ? setHomeTeamName : setAwayTeamName;
+        const players = isHome ? homePlayers : awayPlayers;
+        const setPlayers = isHome ? setHomePlayers : setAwayPlayers;
+        const openSelection = () => isHome ? setIsHomeSelectionOpen(true) : setIsAwaySelectionOpen(true);
+        const openLoad = () => isHome ? setIsHomeLoadOpen(true) : setIsAwayLoadOpen(true);
+        const unavailablePlayerIds = (isHome ? awayPlayers : homePlayers).map(p => p.id);
+        const unavailableTeamId = isHome ? awayTeamId : homeTeamId;
+
+        return (
+            <Card>
+                <CardHeader>
+                     <CardTitle className="text-2xl font-semibold">
+                        Equipo {isHome ? 'Local' : 'Visitante'}
+                     </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div>
+                        <Label htmlFor={`${side}TeamName`} className="sr-only">Nombre del Equipo</Label>
+                        <Input
+                            id={`${side}TeamName`}
+                            value={teamName}
+                            onChange={(e) => setTeamName(e.target.value)}
+                        />
+                    </div>
+                    <div className="flex flex-col gap-3">
+                        <Button variant="default" className="w-full justify-center py-6 text-base" onClick={openSelection}>
+                            <Users className="mr-2 h-5 w-5" /> Seleccionar Jugadores ({players.length})
+                        </Button>
+                        <Button variant="secondary" className="w-full justify-center py-6 text-base" onClick={openLoad} disabled={teams.length === 0}>
+                            <FileDown className="mr-2 h-5 w-5" /> Cargar Equipo Predefinido
+                        </Button>
+                    </div>
+                    {isHome ? (
+                         <PlayerSelectionModal
+                            isOpen={isHomeSelectionOpen}
+                            onClose={() => setIsHomeSelectionOpen(false)}
+                            onConfirm={setHomePlayers}
+                            allPlayers={roster}
+                            unavailablePlayerIds={unavailablePlayerIds}
+                            initialSelectedIds={homePlayers.map(p => p.id)}
+                         />
+                    ) : (
+                         <PlayerSelectionModal
+                            isOpen={isAwaySelectionOpen}
+                            onClose={() => setIsAwaySelectionOpen(false)}
+                            onConfirm={setAwayPlayers}
+                            allPlayers={roster}
+                            unavailablePlayerIds={unavailablePlayerIds}
+                            initialSelectedIds={awayPlayers.map(p => p.id)}
+                         />
+                    )}
+                     {isHome ? (
+                        <LoadTeamModal
+                            isOpen={isHomeLoadOpen}
+                            onClose={() => setIsHomeLoadOpen(false)}
+                            onLoad={(team) => handleLoadTeam(team, 'home')}
+                            teams={teams}
+                            unavailableTeamId={awayTeamId}
+                        />
+                     ) : (
+                         <LoadTeamModal
+                            isOpen={isAwayLoadOpen}
+                            onClose={() => setIsAwayLoadOpen(false)}
+                            onLoad={(team) => handleLoadTeam(team, 'away')}
+                            teams={teams}
+                            unavailableTeamId={homeTeamId}
+                        />
+                     )}
+
+                    <div className="p-2 border rounded-md min-h-[100px] bg-muted/30">
+                        <h4 className="font-medium text-sm text-muted-foreground mb-2">Jugadores Seleccionados:</h4>
+                        {players.length > 0 ? (
+                            <ul className="space-y-1 text-sm">
+                                {players.map(p => <li key={p.id} className="font-medium">#{p.number} {p.name}</li>)}
+                            </ul>
+                        ) : (
+                            <p className="text-sm text-muted-foreground text-center py-4">Ningún jugador seleccionado</p>
+                        )}
+                    </div>
+                </CardContent>
+            </Card>
+        );
+    };
+
+    const GameSettingInput = ({ label, field, disabled = false }: { label: string, field: keyof GameSettings, disabled?: boolean }) => (
+        <div className="flex flex-col items-center space-y-2">
+            <Label>{label}</Label>
+            <div className="flex items-center gap-2">
+                <Button size="icon" variant="outline" className="h-9 w-9" onClick={() => handleSettingChange(field, (gameSettings[field] as number) - 1)} disabled={disabled}>
+                    <Minus className="h-4 w-4" />
+                </Button>
+                <Input className="text-center w-20 h-9" readOnly value={String(gameSettings[field])} disabled={disabled} />
+                <Button size="icon" variant="outline" className="h-9 w-9" onClick={() => handleSettingChange(field, (gameSettings[field] as number) + 1)} disabled={disabled}>
+                    <Plus className="h-4 w-4" />
+                </Button>
+            </div>
+        </div>
+    );
+
+    if (isLoading) {
+        return <LoadingModal />;
+    }
+
+    if (gameInProgress) {
+        return (
+             <AlertDialog open={true} onOpenChange={() => router.push('/game/live')}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="flex items-center gap-2"><AlertTriangle className="text-yellow-500" /> Juego en Curso Detectado</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Hay un partido activo. No puedes crear uno nuevo hasta que finalices el actual. Serás redirigido al partido en curso.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogAction onClick={() => router.push('/game/live')}>Ir al Partido</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        );
+    }
+    
+    return (
+        <>
+            {isStartingGame && <LoadingModal />}
+            <div className="container mx-auto px-4 py-8">
+                <div className="mb-8">
+                    <h1 className="text-3xl font-bold tracking-tight text-primary">Configuración del Partido</h1>
+                    <p className="text-muted-foreground">Define los equipos y reglas antes de empezar.</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+                    <div className="space-y-8">
+                       <TeamCard side="home" />
+                       <TeamCard side="away" />
+                    </div>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Ajustes del Partido</CardTitle>
+                        </CardHeader>
+                         <CardContent className="space-y-6">
+                            <div className="space-y-2">
+                                <Label htmlFor="gameName">Nombre del Partido (Opcional)</Label>
+                                <Input
+                                    id="gameName"
+                                    placeholder="Ej: Final Campeonato"
+                                    value={gameSettings.name}
+                                    onChange={(e) => handleSettingChange('name', e.target.value)}
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                <GameSettingInput label="Número de Cuartos" field="quarters" />
+                                <GameSettingInput label="Duración del Cuarto (min)" field="quarterLength" />
+                                <GameSettingInput label="Duración Prórroga (min)" field="overtimeLength" />
+                                <GameSettingInput label="Tiempo Muerto (seg)" field="timeoutLength" />
+                            </div>
+                            
+                             <div className="space-y-4 border-t pt-6">
+                                <h4 className="text-base font-semibold text-muted-foreground">Tiempos Muertos</h4>
+                                <GameSettingInput label="Tiempos (Prórroga)" field="timeoutsOvertime" />
+                            </div>
+
+
+                             <div className="space-y-4 border-t pt-6">
+                                <h4 className="text-base font-semibold text-muted-foreground">Faltas</h4>
+                                <GameSettingInput label="Faltas para Bonus" field="foulsToBonus" />
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+                
+                <Separator className="my-8" />
+                
+                <div className="flex justify-end">
+                    <Button size="lg" onClick={handleStartGame} disabled={isStartingGame}>
+                        Iniciar Partido <ArrowRight className="ml-2 h-5 w-5" />
+                    </Button>
+                </div>
+            </div>
+
+            <AlertDialog open={!!error} onOpenChange={() => setError(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Error de Configuración</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            {error}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => setError(null)}>Entendido</AlertDialogCancel>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </>
+    );
+}
