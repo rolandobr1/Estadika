@@ -112,7 +112,7 @@ export default function Home() {
             <div className="relative mx-auto mb-5 flex h-[72px] w-[72px] items-center justify-center rounded-full bg-gradient-to-br from-slate-600 to-slate-800 shadow-md">
                 <RiBasketballLine className="h-8 w-8 text-white"/>
             </div>
-            <h1 className="text-3xl font-bold tracking-tight text-slate-800">App de Basket</h1>
+            <h1 className="text-3xl font-bold tracking-tight text-slate-800">Estadika</h1>
             <p className="mt-2 text-base text-slate-500">Tu asistente de baloncesto todo en uno.</p>
           </div>
 
@@ -129,7 +129,7 @@ export default function Home() {
           </div>
         </div>
         <footer className="absolute bottom-6 text-sm text-foreground/60">
-          © {new Date().getFullYear()}
+          © {new Date().getFullYear()} Estadika
         </footer>
       </main>
   );

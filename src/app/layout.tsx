@@ -9,7 +9,7 @@ import { Inter } from 'next/font/google';
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
 export const metadata: Metadata = {
-  title: 'Estadísticas de Baloncesto',
+  title: 'Estadika',
   description: 'Tu asistente de baloncesto todo en uno para seguimiento de estadísticas, gestión de plantillas y torneos.',
 };
 
