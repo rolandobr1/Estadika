@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -25,30 +26,31 @@ export default function SpectatorPage() {
             const specificGameRaw = localStorage.getItem(`liveGame_${gameId}`);
             if (specificGameRaw) {
                 const parsed = JSON.parse(specificGameRaw);
-                // Ensure the ID matches, just in case
-                if (parsed.id === gameId) {
-                    return parsed;
-                }
+                if (parsed.id === gameId) return parsed;
             }
 
             // If not found, try the main 'liveGame' key
             const mainLiveGameRaw = localStorage.getItem('liveGame');
             if (mainLiveGameRaw) {
                 const parsedMainGame = JSON.parse(mainLiveGameRaw);
-                // CRUCIAL: Check if the currently live game is the one we are spectating
-                if (parsedMainGame.id === gameId) {
-                    return parsedMainGame;
-                }
+                if (parsedMainGame.id === gameId) return parsedMainGame;
             }
             
-            // If still not found, check the history just in case
-            const historyRaw = localStorage.getItem('gameHistory');
-            if(historyRaw) {
-                const historyGames = JSON.parse(historyRaw);
+            // If still not found, check the general history
+            const generalHistoryRaw = localStorage.getItem('gameHistory');
+            if(generalHistoryRaw) {
+                const historyGames = JSON.parse(generalHistoryRaw);
                 const foundInHistory = historyGames.find((g: Game) => g.id === gameId);
                 if(foundInHistory) return foundInHistory;
             }
 
+            // Finally, check the tournament history
+            const tournamentHistoryRaw = localStorage.getItem('tournamentGameHistory');
+            if(tournamentHistoryRaw) {
+                const historyGames = JSON.parse(tournamentHistoryRaw);
+                const foundInHistory = historyGames.find((g: Game) => g.id === gameId);
+                if(foundInHistory) return foundInHistory;
+            }
 
             return null; // No matching game found
         };
@@ -62,8 +64,8 @@ export default function SpectatorPage() {
         loadGame();
 
         const handleStorageChange = (event: StorageEvent) => {
-            // Listen for changes on both keys
-            if (event.key === `liveGame_${gameId}` || event.key === 'liveGame') {
+            // Listen for changes on any key that might affect the game state
+            if (event.key === `liveGame_${gameId}` || event.key === 'liveGame' || event.key === 'gameHistory' || event.key === 'tournamentGameHistory') {
                 loadGame();
             }
         };
@@ -105,7 +107,7 @@ export default function SpectatorPage() {
                         <CardTitle>Partido no encontrado</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <p>No se pudo encontrar un partido en vivo con el ID proporcionado. El enlace puede haber expirado o ser incorrecto.</p>
+                        <p>No se pudo encontrar un partido con el ID proporcionado. El enlace puede haber expirado o ser incorrecto.</p>
                     </CardContent>
                 </Card>
             </div>
