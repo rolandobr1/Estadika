@@ -612,5 +612,3 @@ export default function HistoryPage() {
         </Suspense>
     )
 }
-
-    

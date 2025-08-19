@@ -47,7 +47,6 @@ function gameReducer(state: Game, action: GameAction): Game {
         return state;
     }
     
-    // For actions that should be calculated incrementally on the current state
     const incrementalActions: ActionType[] = [
         'SCORE_UPDATE', 'STAT_UPDATE', 'TIMEOUT', 'SUBSTITUTION', 'ADD_PLAYER_TO_COURT',
         'QUARTER_CHANGE', 'MANUAL_TIMER_ADJUST', 'SET_TIMER'
@@ -110,6 +109,8 @@ function gameReducer(state: Game, action: GameAction): Game {
             let nextState = produce(gameToReopen, draft => {
                 draft.status = 'IN_PROGRESS';
                 draft.clockIsRunning = false;
+                
+                // If we are re-opening, the "current" score becomes the "previous" score for the next time we save.
                 draft.previousScores = { home: draft.homeTeam.stats.score, away: draft.awayTeam.stats.score };
 
                 // Remove the GAME_END action from the log
@@ -125,10 +126,14 @@ function gameReducer(state: Game, action: GameAction): Game {
         
         case 'UNDO_LAST_ACTION': {
              if(state.gameLog.length === 0) return state;
-             const newState = produce(state, draft => {
-                draft.gameLog.pop();
+             const newState = createInitialGame();
+             return produce(newState, draft => {
+                Object.assign(draft, baseGame);
+                const newLog = state.gameLog.slice(0, -1);
+                draft.gameLog = newLog;
+                const recalculatedState = recalculateGameStateFromLog(draft, newLog);
+                Object.assign(draft, recalculatedState);
              });
-             return recalculateGameStateFromLog(newState, newState.gameLog);
         }
         default:
              return state;
@@ -525,12 +530,20 @@ export default function LiveGamePage() {
         if (payload.status === 'FINISHED') {
             dispatch({ type: 'REOPEN_GAME', id: `action_${Date.now()}`, timestamp: Date.now(), description: 'Game re-opened from history.', payload });
         } else {
-            dispatch({ type: 'GAME_START', id: `action_${Date.now()}`, timestamp: Date.now(), description: 'Game loaded from storage.', payload: {
+            const initialAction: GameAction = {
+                type: 'GAME_START', 
+                id: `action_${Date.now()}`, 
+                timestamp: Date.now(), 
+                description: 'Game loaded from storage.',
+                payload: {
                     ...payload,
-                    tournamentId: payload.tournamentId,
-                    matchId: payload.matchId,
+                    quarter: payload.currentQuarter,
+                    gameClock: payload.gameClock,
+                    homeScore: payload.homeTeam.stats.score,
+                    awayScore: payload.awayTeam.stats.score
                 }
-            });
+            };
+            dispatch(initialAction);
         }
     } else {
         router.replace('/game/setup');
@@ -617,96 +630,104 @@ export default function LiveGamePage() {
   };
   
   useEffect(() => {
-      if (game.status !== 'FINISHED' || typeof window === 'undefined' || isLoading) {
-          return;
-      }
-      
-      if (game.tournamentId) {
-          const tournamentHistory = JSON.parse(localStorage.getItem('tournamentGameHistory') || '[]');
-          tournamentHistory.push(game);
-          localStorage.setItem('tournamentGameHistory', JSON.stringify(tournamentHistory));
-      } else {
-          const gameHistory = JSON.parse(localStorage.getItem('gameHistory') || '[]');
-          gameHistory.push(game);
-          localStorage.setItem('gameHistory', JSON.stringify(gameHistory));
-      }
+    if (game.status !== 'FINISHED' || typeof window === 'undefined' || isLoading) {
+        return;
+    }
+
+    const finalGameData = produce(game, draft => {
+        draft.status = 'FINISHED';
+        draft.clockIsRunning = false;
+    });
+
+    if (finalGameData.tournamentId) {
+        const tournamentHistory = JSON.parse(localStorage.getItem('tournamentGameHistory') || '[]');
+        tournamentHistory.push(finalGameData);
+        localStorage.setItem('tournamentGameHistory', JSON.stringify(tournamentHistory));
+    } else {
+        const gameHistory = JSON.parse(localStorage.getItem('gameHistory') || '[]');
+        gameHistory.push(finalGameData);
+        localStorage.setItem('gameHistory', JSON.stringify(gameHistory));
+    }
 
 
-      if (game.tournamentId && game.matchId) {
-          const tournaments: any[] = JSON.parse(localStorage.getItem('tournaments') || '[]');
-          const tournamentIndex = tournaments.findIndex(t => t.id === game.tournamentId);
+    if (finalGameData.tournamentId && finalGameData.matchId) {
+        const tournaments: any[] = JSON.parse(localStorage.getItem('tournaments') || '[]');
+        const tournamentIndex = tournaments.findIndex(t => t.id === finalGameData.tournamentId);
 
-          if (tournamentIndex !== -1) {
-              const updatedTournament = produce(tournaments[tournamentIndex], (draft: any) => {
-                  const match = draft.matches.find((m: any) => m.id === game.matchId);
-                  if (match) {
-                      const team1 = draft.teams.find((t: any) => t.id === match.team1.id);
-                      const team2 = draft.teams.find((t: any) => t.id === match.team2.id);
+        if (tournamentIndex !== -1) {
+            const updatedTournament = produce(tournaments[tournamentIndex], (draft: any) => {
+                const match = draft.matches.find((m: any) => m.id === finalGameData.matchId);
+                if (match) {
+                    const originalHomeTeam = draft.teams.find((t: any) => t.id === match.team1.id);
+                    const originalAwayTeam = draft.teams.find((t: any) => t.id === match.team2.id);
 
-                      // If the game was resumed, we first need to revert the old stats
-                      if (game.previousScores && team1 && team2) {
-                          const { home: prevHome, away: prevAway } = game.previousScores;
-                          team1.pointsFor -= prevHome;
-                          team1.pointsAgainst -= prevAway;
-                          team2.pointsFor -= prevAway;
-                          team2.pointsAgainst -= prevHome;
+                    // If the game was resumed, we first need to revert the old stats
+                    if (finalGameData.previousScores && originalHomeTeam && originalAwayTeam) {
+                        const { home: prevHome, away: prevAway } = finalGameData.previousScores;
+                        originalHomeTeam.pointsFor -= prevHome;
+                        originalHomeTeam.pointsAgainst -= prevAway;
+                        originalAwayTeam.pointsFor -= prevAway;
+                        originalAwayTeam.pointsAgainst -= prevHome;
 
-                          if (prevHome > prevAway) {
-                              team1.wins--;
-                              team2.losses--;
-                          } else if (prevAway > prevHome) {
-                              team2.wins--;
-                              team1.losses++;
-                          } else { // Handle ties if necessary
-                              // For now, we assume no ties, but you could add logic here
-                          }
-                      }
-                      
-                      // Now apply the new stats
-                      match.status = 'FINISHED';
-                      match.team1.score = game.homeTeam.stats.score;
-                      match.team2.score = game.awayTeam.stats.score;
-                      match.gameId = game.id;
-                      
-                      if (team1 && team2) {
-                          team1.pointsFor += match.team1.score!;
-                          team1.pointsAgainst += match.team2.score!;
-                          team2.pointsFor += match.team2.score!;
-                          team2.pointsAgainst += match.team1.score!;
+                        if (prevHome > prevAway) {
+                            originalHomeTeam.wins--;
+                            originalAwayTeam.losses--;
+                        } else if (prevAway > prevHome) {
+                            originalAwayTeam.wins--;
+                            originalHomeTeam.losses++;
+                        } else {
+                           // ties not handled
+                        }
+                    }
+                    
+                    const newHomeScore = finalGameData.homeTeam.stats.score;
+                    const newAwayScore = finalGameData.awayTeam.stats.score;
 
-                          if (match.team1.score! > match.team2.score!) {
-                              team1.wins++;
-                              team2.losses++;
-                          } else if (match.team2.score! > match.team1.score!) {
-                              team1.losses++;
-                              team2.wins++;
-                          } else {
-                            // Handle ties if they affect standings (e.g., points for a tie)
-                          }
-                      }
-                  }
-              });
-              tournaments[tournamentIndex] = updatedTournament;
-              localStorage.setItem('tournaments', JSON.stringify(tournaments));
-              toast({
-                  title: "Partido de Torneo Finalizado",
-                  description: "Los resultados han sido guardados en el torneo y en el historial general.",
-              });
-          }
-      } else {
-          toast({
-              title: "Partido Guardado",
-              description: "El partido ha sido guardado en el historial general.",
-          });
-      }
+                    // Now apply the new stats
+                    match.status = 'FINISHED';
+                    match.team1.score = newHomeScore;
+                    match.team2.score = newAwayScore;
+                    match.gameId = finalGameData.id;
+                    
+                    if (originalHomeTeam && originalAwayTeam) {
+                        originalHomeTeam.pointsFor += newHomeScore;
+                        originalHomeTeam.pointsAgainst += newAwayScore;
+                        originalAwayTeam.pointsFor += newAwayScore;
+                        originalAwayTeam.pointsAgainst += newHomeScore;
 
-      localStorage.removeItem('liveGame');
-      
-      if (game.tournamentId) {
-          router.push(`/stats?tournamentId=${game.tournamentId}`);
-      } else {
-          router.push('/history');
-      }
+                        if (newHomeScore > newAwayScore) {
+                            originalHomeTeam.wins++;
+                            originalAwayTeam.losses++;
+                        } else if (newAwayScore > newHomeScore) {
+                            originalHomeTeam.losses++;
+                            originalAwayTeam.wins++;
+                        } else {
+                          // Handle ties if they affect standings (e.g., points for a tie)
+                        }
+                    }
+                }
+            });
+            tournaments[tournamentIndex] = updatedTournament;
+            localStorage.setItem('tournaments', JSON.stringify(tournaments));
+            toast({
+                title: "Partido de Torneo Finalizado",
+                description: "Los resultados han sido guardados en el torneo y en el historial general.",
+            });
+        }
+    } else {
+        toast({
+            title: "Partido Guardado",
+            description: "El partido ha sido guardado en el historial general.",
+        });
+    }
+
+    localStorage.removeItem('liveGame');
+    
+    if (game.tournamentId) {
+        router.push(`/stats?tournamentId=${game.tournamentId}`);
+    } else {
+        router.push('/history');
+    }
       
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [game.status]);
