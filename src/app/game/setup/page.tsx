@@ -648,5 +648,3 @@ export default function GameSetupPage() {
         </>
     );
 }
-
-    
