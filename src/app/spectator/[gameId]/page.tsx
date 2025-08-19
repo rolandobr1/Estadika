@@ -18,42 +18,35 @@ export default function SpectatorPage() {
 
     useEffect(() => {
         if (!gameId || typeof window === 'undefined') {
-            setIsLoading(false);
             if (!gameId) setError("No se ha proporcionado un ID de partido.");
+            setIsLoading(false);
             return;
         };
 
         const getGameFromStorage = (): Game | null => {
-            // Check main live game key
-            const mainLiveGameRaw = localStorage.getItem('liveGame');
-            if (mainLiveGameRaw) {
-                const parsed = JSON.parse(mainLiveGameRaw);
-                if (parsed.id === gameId) return parsed;
-            }
-            
-            // Check specific spectator key
-            const specificGameRaw = localStorage.getItem(`liveGame_${gameId}`);
-            if (specificGameRaw) {
-                const parsed = JSON.parse(specificGameRaw);
-                if (parsed.id === gameId) return parsed;
-            }
+            const keysToCheck = [
+                'liveGame',
+                `liveGame_${gameId}`,
+                'gameHistory',
+                'tournamentGameHistory'
+            ];
 
-            // Check general history
-            const generalHistoryRaw = localStorage.getItem('gameHistory');
-            if(generalHistoryRaw) {
-                const games: Game[] = JSON.parse(generalHistoryRaw);
-                const found = games.find((g) => g.id === gameId);
-                if(found) return found;
+            for (const key of keysToCheck) {
+                const rawData = localStorage.getItem(key);
+                if (rawData) {
+                    try {
+                        const data = JSON.parse(rawData);
+                        if (key.includes('History')) { // If it's a history array
+                             const foundGame = (data as Game[]).find(g => g.id === gameId);
+                             if (foundGame) return foundGame;
+                        } else { // If it's a single game object
+                             if (data.id === gameId) return data;
+                        }
+                    } catch (e) {
+                         console.error(`Error parsing data from ${key}`, e);
+                    }
+                }
             }
-
-            // Check tournament history
-            const tournamentHistoryRaw = localStorage.getItem('tournamentGameHistory');
-            if(tournamentHistoryRaw) {
-                 const games: Game[] = JSON.parse(tournamentHistoryRaw);
-                 const found = games.find((g) => g.id === gameId);
-                 if(found) return found;
-            }
-
             return null; // No game found anywhere
         };
 
@@ -73,9 +66,7 @@ export default function SpectatorPage() {
 
         // Listen for storage changes to update in real-time
         const handleStorageChange = (event: StorageEvent) => {
-             if (event.key === `liveGame_${gameId}` || event.key === 'liveGame' || event.key === 'gameHistory' || event.key === 'tournamentGameHistory') {
-                loadGame();
-            }
+            loadGame();
         };
 
         window.addEventListener('storage', handleStorageChange);

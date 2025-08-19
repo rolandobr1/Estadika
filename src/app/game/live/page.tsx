@@ -29,7 +29,7 @@ import { LoadingModal } from '@/components/ui/loader';
 
 // Function to save state to localStorage
 const saveState = (state: Game) => {
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined' || !state.id) return;
   try {
     const serializedState = JSON.stringify(state);
     // For resuming game
@@ -92,23 +92,14 @@ function gameReducer(state: Game, action: GameAction): Game {
                     if (draft.gameClock === 0) {
                         draft.clockIsRunning = false;
                         
-                        // Automatically advance to the next quarter
-                        const quarterChangeAction: GameAction = {
+                        // Apply the quarter change logic directly to the draft
+                        applyActionToGameState(draft as Game, {
                             type: 'QUARTER_CHANGE',
                             id: `action_${Date.now()}`,
                             timestamp: Date.now(),
                             description: `Final del periodo ${draft.currentQuarter}.`,
-                            payload: {
-                                newQuarter: draft.currentQuarter + 1,
-                                quarter: draft.currentQuarter,
-                                gameClock: 0,
-                                homeScore: draft.homeTeam.stats.score,
-                                awayScore: draft.awayTeam.stats.score,
-                            }
-                        };
-                        
-                        // Apply the quarter change logic directly to the draft
-                        applyActionToGameState(draft as Game, quarterChangeAction, false);
+                            payload: { newQuarter: draft.currentQuarter + 1, quarter: draft.currentQuarter, gameClock: 0, homeScore: draft.homeTeam.stats.score, awayScore: draft.awayTeam.stats.score }
+                        }, false);
                     }
                 }
             });
