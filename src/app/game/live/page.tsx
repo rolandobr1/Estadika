@@ -10,7 +10,7 @@ import { PiUserSwitchBold } from "react-icons/pi";
 import { IoStatsChart } from "react-icons/io5";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
-import type { Game, Player, TeamInGame, StatType, PlayerStats, GameAction, AppSettings } from '@/lib/types';
+import type { Game, Player, TeamInGame, StatType, PlayerStats, GameAction, AppSettings, ActionType } from '@/lib/types';
 import { defaultAppSettings } from '@/lib/types';
 import { createInitialGame, recalculateGameStateFromLog, applyActionToGameState } from '@/lib/game-utils';
 import { cn } from '@/lib/utils';
@@ -93,17 +93,22 @@ function gameReducer(state: Game, action: GameAction): Game {
                         draft.clockIsRunning = false;
                         
                         // Automatically advance to the next quarter
-                        const newQuarter = draft.currentQuarter + 1;
-                        const quarterChangeAction = {
+                        const quarterChangeAction: GameAction = {
                             type: 'QUARTER_CHANGE',
                             id: `action_${Date.now()}`,
                             timestamp: Date.now(),
                             description: `Final del periodo ${draft.currentQuarter}.`,
-                            payload: { newQuarter }
+                            payload: {
+                                newQuarter: draft.currentQuarter + 1,
+                                quarter: draft.currentQuarter,
+                                gameClock: 0,
+                                homeScore: draft.homeTeam.stats.score,
+                                awayScore: draft.awayTeam.stats.score,
+                            }
                         };
                         
                         // Apply the quarter change logic directly to the draft
-                        return applyActionToGameState(draft as Game, quarterChangeAction, false);
+                        applyActionToGameState(draft as Game, quarterChangeAction, false);
                     }
                 }
             });
