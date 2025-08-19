@@ -17,8 +17,8 @@ export default function SpectatorPage() {
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        if (!gameId || typeof window === 'undefined') {
-            if (!gameId) setError("No se ha proporcionado un ID de partido.");
+        if (!gameId) {
+            setError("No se ha proporcionado un ID de partido.");
             setIsLoading(false);
             return;
         };
@@ -36,10 +36,10 @@ export default function SpectatorPage() {
                 if (rawData) {
                     try {
                         const data = JSON.parse(rawData);
-                        if (key.includes('History')) { // If it's a history array
+                        if (Array.isArray(data)) { // History arrays
                              const foundGame = (data as Game[]).find(g => g.id === gameId);
                              if (foundGame) return foundGame;
-                        } else { // If it's a single game object
+                        } else { // Single game object
                              if (data.id === gameId) return data;
                         }
                     } catch (e) {
