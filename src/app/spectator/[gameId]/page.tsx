@@ -14,10 +14,12 @@ export default function SpectatorPage() {
     const gameId = params.gameId as string;
     const [game, setGame] = useState<Game | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         if (!gameId || typeof window === 'undefined') {
             setIsLoading(false);
+            if (!gameId) setError("No se ha proporcionado un ID de partido.");
             return;
         };
 
@@ -58,13 +60,17 @@ export default function SpectatorPage() {
         const loadGame = () => {
             const gameData = getGameFromStorage();
             setGame(gameData);
+            if (!gameData) {
+                setError("No se pudo encontrar un partido con el ID proporcionado. El enlace puede haber expirado o ser incorrecto.");
+            } else {
+                setError(null);
+            }
             setIsLoading(false);
         };
 
         loadGame();
 
         const handleStorageChange = (event: StorageEvent) => {
-            // Listen for changes on any key that might affect the game state
             if (event.key === `liveGame_${gameId}` || event.key === 'liveGame' || event.key === 'gameHistory' || event.key === 'tournamentGameHistory') {
                 loadGame();
             }
@@ -99,7 +105,7 @@ export default function SpectatorPage() {
         return <LoadingModal />;
     }
 
-    if (!game) {
+    if (error || !game) {
         return (
             <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-4">
                  <Card className="w-full max-w-md text-center">
@@ -107,7 +113,7 @@ export default function SpectatorPage() {
                         <CardTitle>Partido no encontrado</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <p>No se pudo encontrar un partido con el ID proporcionado. El enlace puede haber expirado o ser incorrecto.</p>
+                        <p>{error || "No se pudo encontrar el partido."}</p>
                     </CardContent>
                 </Card>
             </div>
