@@ -24,6 +24,14 @@ export default function SpectatorPage() {
             const storedGame = localStorage.getItem(storageKey);
             if (storedGame) {
                 setGame(JSON.parse(storedGame));
+            } else {
+                 const mainLiveGame = localStorage.getItem('liveGame');
+                 if(mainLiveGame) {
+                    const parsedMainGame = JSON.parse(mainLiveGame);
+                    if(parsedMainGame.id === gameId) {
+                        setGame(parsedMainGame);
+                    }
+                 }
             }
             setIsLoading(false);
         };
@@ -31,6 +39,7 @@ export default function SpectatorPage() {
         loadGame();
 
         const handleStorageChange = (event: StorageEvent) => {
+            // We listen for changes on both the generic 'liveGame' key and the specific game key
             if (event.key === storageKey || event.key === 'liveGame') {
                 loadGame();
             }
