@@ -24,54 +24,56 @@ export default function SpectatorPage() {
         };
 
         const getGameFromStorage = (): Game | null => {
-            // First, try the specific spectator key for direct sharing
+            // Check specific spectator key first
             const specificGameRaw = localStorage.getItem(`liveGame_${gameId}`);
             if (specificGameRaw) {
                 const parsed = JSON.parse(specificGameRaw);
                 if (parsed.id === gameId) return parsed;
             }
 
-            // If not found, try the main 'liveGame' key
+            // Check main live game key
             const mainLiveGameRaw = localStorage.getItem('liveGame');
             if (mainLiveGameRaw) {
-                const parsedMainGame = JSON.parse(mainLiveGameRaw);
-                if (parsedMainGame.id === gameId) return parsedMainGame;
+                const parsed = JSON.parse(mainLiveGameRaw);
+                if (parsed.id === gameId) return parsed;
             }
             
-            // If still not found, check the general history
+            // Check general history
             const generalHistoryRaw = localStorage.getItem('gameHistory');
             if(generalHistoryRaw) {
-                const historyGames = JSON.parse(generalHistoryRaw);
-                const foundInHistory = historyGames.find((g: Game) => g.id === gameId);
-                if(foundInHistory) return foundInHistory;
+                const games: Game[] = JSON.parse(generalHistoryRaw);
+                const found = games.find((g) => g.id === gameId);
+                if(found) return found;
             }
 
-            // Finally, check the tournament history
+            // Check tournament history
             const tournamentHistoryRaw = localStorage.getItem('tournamentGameHistory');
             if(tournamentHistoryRaw) {
-                const historyGames = JSON.parse(tournamentHistoryRaw);
-                const foundInHistory = historyGames.find((g: Game) => g.id === gameId);
-                if(foundInHistory) return foundInHistory;
+                 const games: Game[] = JSON.parse(tournamentHistoryRaw);
+                 const found = games.find((g) => g.id === gameId);
+                 if(found) return found;
             }
 
-            return null; // No matching game found
+            return null; // No game found anywhere
         };
 
         const loadGame = () => {
             const gameData = getGameFromStorage();
-            setGame(gameData);
-            if (!gameData) {
-                setError("No se pudo encontrar un partido con el ID proporcionado. El enlace puede haber expirado o ser incorrecto.");
-            } else {
+            if (gameData) {
+                setGame(gameData);
                 setError(null);
+            } else {
+                setGame(null);
+                setError("No se pudo encontrar un partido con el ID proporcionado. El enlace puede haber expirado o ser incorrecto.");
             }
             setIsLoading(false);
         };
 
         loadGame();
 
+        // Listen for storage changes to update in real-time
         const handleStorageChange = (event: StorageEvent) => {
-            if (event.key === `liveGame_${gameId}` || event.key === 'liveGame' || event.key === 'gameHistory' || event.key === 'tournamentGameHistory') {
+             if (event.key === `liveGame_${gameId}` || event.key === 'liveGame' || event.key === 'gameHistory' || event.key === 'tournamentGameHistory') {
                 loadGame();
             }
         };
