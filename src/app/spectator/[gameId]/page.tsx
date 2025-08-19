@@ -25,13 +25,17 @@ export default function SpectatorPage() {
 
         const loadGame = () => {
             let gameData = null;
-            const specificGame = localStorage.getItem(storageKey);
-            if (specificGame) {
-                gameData = JSON.parse(specificGame);
+            
+            // First, try the specific spectator key
+            const specificGameRaw = localStorage.getItem(storageKey);
+            if (specificGameRaw) {
+                gameData = JSON.parse(specificGameRaw);
             } else {
-                 const mainLiveGame = localStorage.getItem('liveGame');
-                 if(mainLiveGame) {
-                    const parsedMainGame = JSON.parse(mainLiveGame);
+                 // If not found, try the main liveGame key
+                 const mainLiveGameRaw = localStorage.getItem('liveGame');
+                 if(mainLiveGameRaw) {
+                    const parsedMainGame = JSON.parse(mainLiveGameRaw);
+                    // IMPORTANT: Check if the ID matches the one from the URL
                     if(parsedMainGame.id === gameId) {
                         gameData = parsedMainGame;
                     }
@@ -44,7 +48,7 @@ export default function SpectatorPage() {
         loadGame();
 
         const handleStorageChange = (event: StorageEvent) => {
-            if (event.key === storageKey || (event.key === 'liveGame' && (!event.newValue || JSON.parse(event.newValue).id === gameId))) {
+            if (event.key === storageKey || (event.key === 'liveGame')) {
                 loadGame();
             }
         };
