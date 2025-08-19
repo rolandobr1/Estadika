@@ -299,6 +299,7 @@ export default function GameSetupPage() {
             const { timeoutSettings } = finalSettings;
             switch (timeoutSettings.mode) {
                 case 'per_quarter': return timeoutSettings.timeoutsPerQuarter;
+                case 'per_quarter_custom': return timeoutSettings.timeoutsPerQuarterValues[0] ?? 0;
                 case 'per_half': return timeoutSettings.timeoutsFirstHalf;
                 case 'total': return timeoutSettings.timeoutsTotal;
                 default: return 0;

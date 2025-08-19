@@ -311,7 +311,7 @@ export default function CreateTournamentPage() {
                             <RadioGroupItem value="manual" id="manual-schedule" className="mt-1"/>
                             <Label htmlFor="manual-schedule" className="w-full cursor-pointer">
                                  <span className="font-semibold">Crear calendario manualmente más tarde</span>
-                                 <p className="text-sm text-muted-foreground">El torneo se creará sin partidos. Tendrás que añadirlos manualmente desde la página del torneo.</p>
+                                 <p className="text-sm text-muted-foreground">El torneo se creará sin partidos. Tendrás que añadirlos manually desde la página del torneo.</p>
                             </Label>
                         </div>
                     </RadioGroup>
@@ -343,7 +343,11 @@ export default function CreateTournamentPage() {
                             >
                                 <div className="flex items-center gap-2">
                                     <RadioGroupItem value="per_quarter" id="t-p-q" />
-                                    <Label htmlFor="t-p-q" className="cursor-pointer">Por Cuarto</Label>
+                                    <Label htmlFor="t-p-q" className="cursor-pointer">Por Cuarto (Igual)</Label>
+                                </div>
+                                 <div className="flex items-center gap-2">
+                                    <RadioGroupItem value="per_quarter_custom" id="t-p-q-c" />
+                                    <Label htmlFor="t-p-q-c" className="cursor-pointer">Por Cuarto (Personalizado)</Label>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <RadioGroupItem value="per_half" id="t-p-h" />
@@ -357,6 +361,21 @@ export default function CreateTournamentPage() {
 
                         <div className={cn("transition-opacity pt-4", gameSettings.timeoutSettings.mode !== 'per_quarter' && 'opacity-0 h-0 overflow-hidden')}>
                             <GameSettingInput label="Tiempos por Cuarto" value={gameSettings.timeoutSettings.timeoutsPerQuarter} onChange={val => handleTimeoutSettingChange('timeoutsPerQuarter', val)} disabled={gameSettings.timeoutSettings.mode !== 'per_quarter'} />
+                        </div>
+                        <div className={cn("transition-opacity pt-4 grid grid-cols-2 gap-4", gameSettings.timeoutSettings.mode !== 'per_quarter_custom' && 'opacity-0 h-0 overflow-hidden')}>
+                            {Array.from({ length: gameSettings.quarters }).map((_, i) => (
+                                <GameSettingInput
+                                    key={i}
+                                    label={`Cuarto ${i+1}`}
+                                    value={gameSettings.timeoutSettings.timeoutsPerQuarterValues[i] || 0}
+                                    onChange={(val) => {
+                                        const newValues = [...gameSettings.timeoutSettings.timeoutsPerQuarterValues];
+                                        newValues[i] = val;
+                                        handleTimeoutSettingChange('timeoutsPerQuarterValues', newValues);
+                                    }}
+                                    disabled={gameSettings.timeoutSettings.mode !== 'per_quarter_custom'}
+                                />
+                            ))}
                         </div>
                         <div className={cn("transition-opacity pt-4 grid grid-cols-2 gap-4", gameSettings.timeoutSettings.mode !== 'per_half' && 'opacity-0 h-0 overflow-hidden')}>
                             <GameSettingInput label="Tiempos (1ª Mitad)" value={gameSettings.timeoutSettings.timeoutsFirstHalf} onChange={val => handleTimeoutSettingChange('timeoutsFirstHalf', val)} disabled={gameSettings.timeoutSettings.mode !== 'per_half'} />

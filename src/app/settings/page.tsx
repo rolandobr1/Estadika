@@ -164,12 +164,18 @@ export default function SettingsPage() {
                             <RadioGroup
                                 value={gameSettings.timeoutSettings.mode}
                                 onValueChange={(value) => handleTimeoutSettingChange('mode', value as TimeoutMode)}
-                                className="grid grid-cols-1 md:grid-cols-3 gap-4"
+                                className="grid grid-cols-1 md:grid-cols-2 gap-4"
                             >
                                 <Label htmlFor="tm-per-quarter" className={cn("p-4 rounded-lg border-2 cursor-pointer", gameSettings.timeoutSettings.mode === 'per_quarter' && 'border-primary bg-primary/5')}>
                                      <div className="flex items-center gap-3">
                                         <RadioGroupItem value="per_quarter" id="tm-per-quarter" />
-                                        <span className="font-semibold">Por Cuarto</span>
+                                        <span className="font-semibold">Por Cuarto (Igual)</span>
+                                    </div>
+                                </Label>
+                                <Label htmlFor="tm-per-quarter-custom" className={cn("p-4 rounded-lg border-2 cursor-pointer", gameSettings.timeoutSettings.mode === 'per_quarter_custom' && 'border-primary bg-primary/5')}>
+                                     <div className="flex items-center gap-3">
+                                        <RadioGroupItem value="per_quarter_custom" id="tm-per-quarter-custom" />
+                                        <span className="font-semibold">Por Cuarto (Personalizado)</span>
                                     </div>
                                 </Label>
                                 <Label htmlFor="tm-per-half" className={cn("p-4 rounded-lg border-2 cursor-pointer", gameSettings.timeoutSettings.mode === 'per_half' && 'border-primary bg-primary/5')}>
@@ -198,6 +204,24 @@ export default function SettingsPage() {
                                 <GameSettingInput label="Tiempos Totales" value={gameSettings.timeoutSettings.timeoutsTotal} onChange={val => handleTimeoutSettingChange('timeoutsTotal', val)} disabled={gameSettings.timeoutSettings.mode !== 'total'} />
                             </div>
                             <GameSettingInput label="Tiempos (Prórroga)" value={gameSettings.timeoutsOvertime} onChange={val => handleGameSettingChange('timeoutsOvertime', val)} />
+                        </div>
+                         <div className={cn("pt-4 space-y-4", gameSettings.timeoutSettings.mode !== 'per_quarter_custom' && 'hidden')}>
+                             <Label className="font-semibold">Tiempos Muertos por Cuarto</Label>
+                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                {Array.from({ length: gameSettings.quarters }).map((_, i) => (
+                                     <GameSettingInput
+                                        key={i}
+                                        label={`Cuarto ${i + 1}`}
+                                        value={gameSettings.timeoutSettings.timeoutsPerQuarterValues[i] || 0}
+                                        onChange={(val) => {
+                                            const newValues = [...gameSettings.timeoutSettings.timeoutsPerQuarterValues];
+                                            newValues[i] = val;
+                                            handleTimeoutSettingChange('timeoutsPerQuarterValues', newValues);
+                                        }}
+                                        disabled={gameSettings.timeoutSettings.mode !== 'per_quarter_custom'}
+                                    />
+                                ))}
+                            </div>
                         </div>
                     </div>
 

@@ -197,6 +197,11 @@ function applyActionToDraft(draft: Game, action: GameAction): void {
                 if (timeoutSettings.mode === 'per_quarter') {
                     draft.homeTeam.stats.timeouts = timeoutSettings.timeoutsPerQuarter;
                     draft.awayTeam.stats.timeouts = timeoutSettings.timeoutsPerQuarter;
+                } else if (timeoutSettings.mode === 'per_quarter_custom') {
+                    const quarterIndex = newQuarter - 1;
+                    const timeoutsForQuarter = timeoutSettings.timeoutsPerQuarterValues[quarterIndex] ?? 0;
+                    draft.homeTeam.stats.timeouts = timeoutsForQuarter;
+                    draft.awayTeam.stats.timeouts = timeoutsForQuarter;
                 } else if (timeoutSettings.mode === 'per_half' && oldQuarter <= draft.settings.quarters / 2 && newQuarter > draft.settings.quarters / 2) {
                     draft.homeTeam.stats.timeouts = timeoutSettings.timeoutsSecondHalf;
                     draft.awayTeam.stats.timeouts = timeoutSettings.timeoutsSecondHalf;

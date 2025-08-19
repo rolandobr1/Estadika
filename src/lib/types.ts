@@ -87,7 +87,7 @@ export interface GameAction {
   };
 }
 
-export type TimeoutMode = 'per_quarter' | 'per_half' | 'total';
+export type TimeoutMode = 'per_quarter' | 'per_half' | 'total' | 'per_quarter_custom';
 
 export interface GameSettings {
   name: string;
@@ -103,6 +103,7 @@ export interface GameSettings {
   timeoutSettings: {
     mode: TimeoutMode;
     timeoutsPerQuarter: number;
+    timeoutsPerQuarterValues: number[];
     timeoutsFirstHalf: number;
     timeoutsSecondHalf: number;
     timeoutsTotal: number;
@@ -130,6 +131,7 @@ export const defaultAppSettings: AppSettings = {
         timeoutSettings: {
             mode: 'per_half',
             timeoutsPerQuarter: 1,
+            timeoutsPerQuarterValues: [1, 1, 1, 1],
             timeoutsFirstHalf: 2,
             timeoutsSecondHalf: 3,
             timeoutsTotal: 5,
