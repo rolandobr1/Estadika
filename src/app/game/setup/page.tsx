@@ -16,10 +16,11 @@ import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 
-import type { Player, Team, Game, TeamInGame, PlayerStats, GameSettings, AppSettings } from '@/lib/types';
+import type { Player, Team, Game, TeamInGame, PlayerStats, GameSettings, AppSettings, TimeoutMode } from '@/lib/types';
 import { defaultAppSettings } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { LoadingModal } from '@/components/ui/loader';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 // Helper function to create a clean slate for player stats
 const createInitialPlayerStats = (): PlayerStats => ({
@@ -249,6 +250,16 @@ export default function GameSetupPage() {
         if (typeof value === 'number' && value < 0) return;
         setGameSettings(prev => ({...prev, [field]: value}));
     };
+
+    const handleTimeoutSettingChange = (field: keyof GameSettings['timeoutSettings'], value: any) => {
+        setGameSettings(prev => ({
+            ...prev,
+            timeoutSettings: {
+                ...prev.timeoutSettings,
+                [field]: value,
+            }
+        }));
+    };
     
     const handleStartGame = () => {
         if (typeof window !== 'undefined' && localStorage.getItem('liveGame')) {
@@ -421,15 +432,15 @@ export default function GameSetupPage() {
         );
     };
 
-    const GameSettingInput = ({ label, field, disabled = false }: { label: string, field: keyof GameSettings, disabled?: boolean }) => (
+    const GameSettingInput = ({ label, field, value, onChange, disabled = false, min = 0 }: { label: string, field?: keyof GameSettings, value: number, onChange: (val: number) => void, disabled?: boolean, min?: number }) => (
         <div className="flex flex-col items-center space-y-2">
             <Label>{label}</Label>
             <div className="flex items-center gap-2">
-                <Button size="icon" variant="outline" className="h-9 w-9" onClick={() => handleSettingChange(field, (gameSettings[field] as number) - 1)} disabled={disabled}>
+                <Button size="icon" variant="outline" className="h-9 w-9" onClick={() => onChange(value - 1)} disabled={disabled || value <= min}>
                     <Minus className="h-4 w-4" />
                 </Button>
-                <Input className="text-center w-20 h-9" readOnly value={String(gameSettings[field])} disabled={disabled} />
-                <Button size="icon" variant="outline" className="h-9 w-9" onClick={() => handleSettingChange(field, (gameSettings[field] as number) + 1)} disabled={disabled}>
+                <Input className="text-center w-20 h-9" readOnly value={String(value)} disabled={disabled} />
+                <Button size="icon" variant="outline" className="h-9 w-9" onClick={() => onChange(value + 1)} disabled={disabled}>
                     <Plus className="h-4 w-4" />
                 </Button>
             </div>
@@ -476,8 +487,9 @@ export default function GameSetupPage() {
                     <Card>
                         <CardHeader>
                             <CardTitle>Ajustes del Partido</CardTitle>
+                            <CardDescription>Estos ajustes anularán la configuración por defecto.</CardDescription>
                         </CardHeader>
-                         <CardContent className="space-y-6">
+                         <CardContent className="space-y-8">
                             <div className="space-y-2">
                                 <Label htmlFor="gameName">Nombre del Partido (Opcional)</Label>
                                 <Input
@@ -487,23 +499,125 @@ export default function GameSetupPage() {
                                     onChange={(e) => handleSettingChange('name', e.target.value)}
                                 />
                             </div>
-
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                                <GameSettingInput label="Número de Cuartos" field="quarters" />
-                                <GameSettingInput label="Duración del Cuarto (min)" field="quarterLength" />
-                                <GameSettingInput label="Duración Prórroga (min)" field="overtimeLength" />
-                                <GameSettingInput label="Tiempo Muerto (seg)" field="timeoutLength" />
+                            
+                            <div className="space-y-4">
+                                <h3 className="text-lg font-semibold text-muted-foreground">Tiempo de Juego</h3>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                                    <GameSettingInput label="Nº de Cuartos" value={gameSettings.quarters} onChange={val => handleSettingChange('quarters', val)} min={1}/>
+                                    <GameSettingInput label="Duración Cuarto (min)" value={gameSettings.quarterLength} onChange={val => handleSettingChange('quarterLength', val)} min={1}/>
+                                    <GameSettingInput label="Duración Prórroga (min)" value={gameSettings.overtimeLength} onChange={val => handleSettingChange('overtimeLength', val)} min={1}/>
+                                </div>
                             </div>
                             
-                             <div className="space-y-4 border-t pt-6">
-                                <h4 className="text-base font-semibold text-muted-foreground">Tiempos Muertos</h4>
-                                <GameSettingInput label="Tiempos (Prórroga)" field="timeoutsOvertime" />
+                            <div className="space-y-4 border-t pt-6">
+                                <h3 className="text-lg font-semibold text-muted-foreground">Tiempos Muertos</h3>
+                                <div className='space-y-4'>
+                                    <Label className="font-semibold">Modo de Tiempos Muertos</Label>
+                                    <RadioGroup
+                                        value={gameSettings.timeoutSettings.mode}
+                                        onValueChange={(value) => handleTimeoutSettingChange('mode', value as TimeoutMode)}
+                                        className="grid grid-cols-1 md:grid-cols-2 gap-4"
+                                    >
+                                        <Label htmlFor="tm-per-quarter" className={cn("p-4 rounded-lg border-2 cursor-pointer", gameSettings.timeoutSettings.mode === 'per_quarter' && 'border-primary bg-primary/5')}>
+                                            <div className="flex items-center gap-3">
+                                                <RadioGroupItem value="per_quarter" id="tm-per-quarter" />
+                                                <span className="font-semibold">Por Cuarto (Igual)</span>
+                                            </div>
+                                        </Label>
+                                        <Label htmlFor="tm-per-quarter-custom" className={cn("p-4 rounded-lg border-2 cursor-pointer", gameSettings.timeoutSettings.mode === 'per_quarter_custom' && 'border-primary bg-primary/5')}>
+                                            <div className="flex items-center gap-3">
+                                                <RadioGroupItem value="per_quarter_custom" id="tm-per-quarter-custom" />
+                                                <span className="font-semibold">Por Cuarto (Personalizado)</span>
+                                            </div>
+                                        </Label>
+                                        <Label htmlFor="tm-per-half" className={cn("p-4 rounded-lg border-2 cursor-pointer", gameSettings.timeoutSettings.mode === 'per_half' && 'border-primary bg-primary/5')}>
+                                            <div className="flex items-center gap-3">
+                                                <RadioGroupItem value="per_half" id="tm-per-half" />
+                                                <span className="font-semibold">Por Mitad</span>
+                                            </div>
+                                        </Label>
+                                        <Label htmlFor="tm-total" className={cn("p-4 rounded-lg border-2 cursor-pointer", gameSettings.timeoutSettings.mode === 'total' && 'border-primary bg-primary/5')}>
+                                            <div className="flex items-center gap-3">
+                                                <RadioGroupItem value="total" id="tm-total" />
+                                                <span className="font-semibold">Total por Partido</span>
+                                            </div>
+                                        </Label>
+                                    </RadioGroup>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 pt-4">
+                                    <div className={cn("transition-opacity", gameSettings.timeoutSettings.mode !== 'per_quarter' && 'opacity-50')}>
+                                        <GameSettingInput label="Tiempos por Cuarto" value={gameSettings.timeoutSettings.timeoutsPerQuarter} onChange={val => handleTimeoutSettingChange('timeoutsPerQuarter', val)} disabled={gameSettings.timeoutSettings.mode !== 'per_quarter'} />
+                                    </div>
+                                    <div className={cn("transition-opacity col-span-1 sm:col-span-2 grid grid-cols-2 gap-6", gameSettings.timeoutSettings.mode !== 'per_half' && 'opacity-50')}>
+                                        <GameSettingInput label="Tiempos (1ª Mitad)" value={gameSettings.timeoutSettings.timeoutsFirstHalf} onChange={val => handleTimeoutSettingChange('timeoutsFirstHalf', val)} disabled={gameSettings.timeoutSettings.mode !== 'per_half'} />
+                                        <GameSettingInput label="Tiempos (2ª Mitad)" value={gameSettings.timeoutSettings.timeoutsSecondHalf} onChange={val => handleTimeoutSettingChange('timeoutsSecondHalf', val)} disabled={gameSettings.timeoutSettings.mode !== 'per_half'} />
+                                    </div>
+                                    <div className={cn("transition-opacity", gameSettings.timeoutSettings.mode !== 'total' && 'opacity-50')}>
+                                        <GameSettingInput label="Tiempos Totales" value={gameSettings.timeoutSettings.timeoutsTotal} onChange={val => handleTimeoutSettingChange('timeoutsTotal', val)} disabled={gameSettings.timeoutSettings.mode !== 'total'} />
+                                    </div>
+                                    <GameSettingInput label="Tiempos (Prórroga)" value={gameSettings.timeoutsOvertime} onChange={val => handleSettingChange('timeoutsOvertime', val)} />
+                                </div>
+                                <div className={cn("pt-4 space-y-4", gameSettings.timeoutSettings.mode !== 'per_quarter_custom' && 'hidden')}>
+                                    <Label className="font-semibold">Tiempos Muertos por Cuarto</Label>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                        {Array.from({ length: gameSettings.quarters }).map((_, i) => (
+                                            <GameSettingInput
+                                                key={i}
+                                                label={`Cuarto ${i + 1}`}
+                                                value={gameSettings.timeoutSettings.timeoutsPerQuarterValues[i] || 0}
+                                                onChange={(val) => {
+                                                    const newValues = [...gameSettings.timeoutSettings.timeoutsPerQuarterValues];
+                                                    newValues[i] = val;
+                                                    handleTimeoutSettingChange('timeoutsPerQuarterValues', newValues);
+                                                }}
+                                                disabled={gameSettings.timeoutSettings.mode !== 'per_quarter_custom'}
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
                             </div>
+                            
+                            <div className="space-y-4 border-t pt-6">
+                                <h3 className="text-lg font-semibold text-muted-foreground">Faltas</h3>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                    <GameSettingInput label="Faltas para Bonus" value={gameSettings.foulsToBonus} onChange={val => handleSettingChange('foulsToBonus', val)} min={1}/>
+                                </div>
+                                <div className="space-y-4 pt-4">
+                                     <h4 className="text-base font-semibold text-muted-foreground">Expulsiones por Faltas</h4>
+                                    <div className="flex items-center space-x-2">
+                                        <Checkbox 
+                                            id="allowFoulOut"
+                                            checked={gameSettings.allowFoulOut}
+                                            onCheckedChange={(checked) => handleSettingChange('allowFoulOut', !!checked)}
+                                        />
+                                        <label
+                                            htmlFor="allowFoulOut"
+                                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                                        >
+                                            Por faltas personales
+                                        </label>
+                                    </div>
+                                    <div className={`transition-opacity ${!gameSettings.allowFoulOut ? 'opacity-50' : ''}`}>
+                                        <GameSettingInput label="Nº Faltas para Expulsión" value={gameSettings.foulsToFoulOut} onChange={val => handleSettingChange('foulsToFoulOut', val)} disabled={!gameSettings.allowFoulOut} min={1} />
+                                    </div>
 
-
-                             <div className="space-y-4 border-t pt-6">
-                                <h4 className="text-base font-semibold text-muted-foreground">Faltas</h4>
-                                <GameSettingInput label="Faltas para Bonus" field="foulsToBonus" />
+                                    <div className="flex items-center space-x-2 pt-2">
+                                        <Checkbox 
+                                            id="allowTechnicalFoulOut"
+                                            checked={gameSettings.allowTechnicalFoulOut}
+                                            onCheckedChange={(checked) => handleSettingChange('allowTechnicalFoulOut', !!checked)}
+                                        />
+                                        <label
+                                            htmlFor="allowTechnicalFoulOut"
+                                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                                        >
+                                            Por faltas técnicas
+                                        </label>
+                                    </div>
+                                    <div className={`transition-opacity ${!gameSettings.allowTechnicalFoulOut ? 'opacity-50' : ''}`}>
+                                        <GameSettingInput label="Nº F. Técnicas para Expulsión" value={gameSettings.technicalFoulsToFoulOut} onChange={val => handleSettingChange('technicalFoulsToFoulOut', val)} disabled={!gameSettings.allowTechnicalFoulOut} min={1} />
+                                    </div>
+                                </div>
                             </div>
                         </CardContent>
                     </Card>
@@ -534,3 +648,5 @@ export default function GameSetupPage() {
         </>
     );
 }
+
+    
