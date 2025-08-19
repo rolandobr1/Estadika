@@ -24,13 +24,6 @@ export default function SpectatorPage() {
         };
 
         const getGameFromStorage = (): Game | null => {
-            // Check specific spectator key first
-            const specificGameRaw = localStorage.getItem(`liveGame_${gameId}`);
-            if (specificGameRaw) {
-                const parsed = JSON.parse(specificGameRaw);
-                if (parsed.id === gameId) return parsed;
-            }
-
             // Check main live game key
             const mainLiveGameRaw = localStorage.getItem('liveGame');
             if (mainLiveGameRaw) {
@@ -38,6 +31,13 @@ export default function SpectatorPage() {
                 if (parsed.id === gameId) return parsed;
             }
             
+            // Check specific spectator key
+            const specificGameRaw = localStorage.getItem(`liveGame_${gameId}`);
+            if (specificGameRaw) {
+                const parsed = JSON.parse(specificGameRaw);
+                if (parsed.id === gameId) return parsed;
+            }
+
             // Check general history
             const generalHistoryRaw = localStorage.getItem('gameHistory');
             if(generalHistoryRaw) {
