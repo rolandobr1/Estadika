@@ -16,31 +16,35 @@ export default function SpectatorPage() {
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        if (!gameId || typeof window === 'undefined') return;
+        if (!gameId || typeof window === 'undefined') {
+            setIsLoading(false);
+            return;
+        };
 
         const storageKey = `liveGame_${gameId}`;
 
         const loadGame = () => {
-            const storedGame = localStorage.getItem(storageKey);
-            if (storedGame) {
-                setGame(JSON.parse(storedGame));
+            let gameData = null;
+            const specificGame = localStorage.getItem(storageKey);
+            if (specificGame) {
+                gameData = JSON.parse(specificGame);
             } else {
                  const mainLiveGame = localStorage.getItem('liveGame');
                  if(mainLiveGame) {
                     const parsedMainGame = JSON.parse(mainLiveGame);
                     if(parsedMainGame.id === gameId) {
-                        setGame(parsedMainGame);
+                        gameData = parsedMainGame;
                     }
                  }
             }
+            setGame(gameData);
             setIsLoading(false);
         };
 
         loadGame();
 
         const handleStorageChange = (event: StorageEvent) => {
-            // We listen for changes on both the generic 'liveGame' key and the specific game key
-            if (event.key === storageKey || event.key === 'liveGame') {
+            if (event.key === storageKey || (event.key === 'liveGame' && (!event.newValue || JSON.parse(event.newValue).id === gameId))) {
                 loadGame();
             }
         };
