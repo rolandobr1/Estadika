@@ -21,26 +21,41 @@ export default function SpectatorPage() {
             return;
         };
 
-        const storageKey = `liveGame_${gameId}`;
+        const getGameFromStorage = (): Game | null => {
+            // First, try the specific spectator key for direct sharing
+            const specificGameRaw = localStorage.getItem(`liveGame_${gameId}`);
+            if (specificGameRaw) {
+                const parsed = JSON.parse(specificGameRaw);
+                // Ensure the ID matches, just in case
+                if (parsed.id === gameId) {
+                    return parsed;
+                }
+            }
+
+            // If not found, try the main 'liveGame' key
+            const mainLiveGameRaw = localStorage.getItem('liveGame');
+            if (mainLiveGameRaw) {
+                const parsedMainGame = JSON.parse(mainLiveGameRaw);
+                // CRUCIAL: Check if the currently live game is the one we are spectating
+                if (parsedMainGame.id === gameId) {
+                    return parsedMainGame;
+                }
+            }
+            
+            // If still not found, check the history just in case
+            const historyRaw = localStorage.getItem('gameHistory');
+            if(historyRaw) {
+                const historyGames = JSON.parse(historyRaw);
+                const foundInHistory = historyGames.find((g: Game) => g.id === gameId);
+                if(foundInHistory) return foundInHistory;
+            }
+
+
+            return null; // No matching game found
+        };
 
         const loadGame = () => {
-            let gameData = null;
-            
-            // First, try the specific spectator key
-            const specificGameRaw = localStorage.getItem(storageKey);
-            if (specificGameRaw) {
-                gameData = JSON.parse(specificGameRaw);
-            } else {
-                 // If not found, try the main liveGame key
-                 const mainLiveGameRaw = localStorage.getItem('liveGame');
-                 if(mainLiveGameRaw) {
-                    const parsedMainGame = JSON.parse(mainLiveGameRaw);
-                    // IMPORTANT: Check if the ID matches the one from the URL
-                    if(parsedMainGame.id === gameId) {
-                        gameData = parsedMainGame;
-                    }
-                 }
-            }
+            const gameData = getGameFromStorage();
             setGame(gameData);
             setIsLoading(false);
         };
@@ -48,7 +63,8 @@ export default function SpectatorPage() {
         loadGame();
 
         const handleStorageChange = (event: StorageEvent) => {
-            if (event.key === storageKey || (event.key === 'liveGame')) {
+            // Listen for changes on both keys
+            if (event.key === `liveGame_${gameId}` || event.key === 'liveGame') {
                 loadGame();
             }
         };
@@ -127,7 +143,7 @@ export default function SpectatorPage() {
                  </CardContent>
             </Card>
              <footer className="absolute bottom-6 text-sm text-muted-foreground">
-                Actualizaciones en tiempo real.
+                {game.status === 'FINISHED' ? 'Este partido ha finalizado.' : 'Actualizaciones en tiempo real.'}
             </footer>
         </main>
     );
