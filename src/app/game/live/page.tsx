@@ -32,6 +32,7 @@ const saveState = (state: Game) => {
   if (typeof window === 'undefined') return;
   try {
     const serializedState = JSON.stringify(state);
+    // For resuming game
     localStorage.setItem('liveGame', serializedState);
     // For spectator view
     localStorage.setItem(`liveGame_${state.id}`, serializedState);
