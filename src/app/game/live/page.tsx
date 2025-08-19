@@ -91,6 +91,19 @@ function gameReducer(state: Game, action: GameAction): Game {
                     draft.gameClock = Math.max(0, draft.gameClock - 1);
                     if (draft.gameClock === 0) {
                         draft.clockIsRunning = false;
+                        
+                        // Automatically advance to the next quarter
+                        const newQuarter = draft.currentQuarter + 1;
+                        const quarterChangeAction = {
+                            type: 'QUARTER_CHANGE',
+                            id: `action_${Date.now()}`,
+                            timestamp: Date.now(),
+                            description: `Final del periodo ${draft.currentQuarter}.`,
+                            payload: { newQuarter }
+                        };
+                        
+                        // Apply the quarter change logic directly to the draft
+                        return applyActionToGameState(draft as Game, quarterChangeAction, false);
                     }
                 }
             });
@@ -585,7 +598,7 @@ export default function LiveGamePage() {
         clearInterval(interval);
       }
     };
-  }, [game.clockIsRunning, game.isTimeoutActive]);
+  }, [game.clockIsRunning, game.isTimeoutActive, game.currentQuarter, game.gameClock, game.homeTeam.stats.score, game.awayTeam.stats.score]);
 
 
   useEffect(() => {
@@ -1273,3 +1286,4 @@ export default function LiveGamePage() {
     </>
   );
 }
+
