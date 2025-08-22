@@ -4,14 +4,14 @@
 
 @layer base {
   :root {
-    --background: 240 25% 97%; /* #F5F5FA */
-    --foreground: 222 47% 11%;
-    --card: 0 0% 100%;
+    --background: 240 25% 97%; /* Color de fondo principal (gris claro) */
+    --foreground: 222 47% 11%; /* Color de las letras (texto principal) */
+    --card: 0 0% 100%; /* Color de fondo de los contenedores/tarjetas */
     --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
-    --primary: 229 99% 59%; /* #304FFE */
-    --primary-foreground: 210 40% 98%;
+    --primary: 229 99% 59%; /* Color primario (el azul que mencionas) */
+    --primary-foreground: 210 40% 98%; /* Texto sobre el color primario */
     --secondary: 240 5% 96%;
     --secondary-foreground: 240 6% 10%;
     --muted: 240 5% 96%;

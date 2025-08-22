@@ -602,7 +602,6 @@ export default function LiveGamePage() {
 
     setIsFinishingGame(true);
 
-    // Create a final, clean copy of the game to be saved to history
     const finalGame = produce(game, draft => {
         draft.status = 'FINISHED';
         draft.clockIsRunning = false;
@@ -622,21 +621,19 @@ export default function LiveGamePage() {
     });
     
     try {
-        // Step 1: Save the completed game to the general history
         await saveFinishedGame(finalGame);
 
-        // Step 2: If it's a tournament match, update the tournament data
         if (finalGame.tournamentId && finalGame.matchId) {
             const tournamentToUpdate = await getTournamentById(finalGame.tournamentId);
 
             if (tournamentToUpdate) {
                 const updatedTournament = produce(tournamentToUpdate, (draft: Tournament) => {
-                    const match = draft.matches.find(m => m.id === finalGame.matchId);
-                    if (match) {
-                        match.status = 'FINISHED';
-                        match.team1.score = finalGame.homeTeam.stats.score;
-                        match.team2.score = finalGame.awayTeam.stats.score;
-                        match.gameId = finalGame.id;
+                    const matchIndex = draft.matches.findIndex(m => m.id === finalGame.matchId);
+                    if (matchIndex !== -1) {
+                         draft.matches[matchIndex].status = 'FINISHED';
+                         draft.matches[matchIndex].team1.score = finalGame.homeTeam.stats.score;
+                         draft.matches[matchIndex].team2.score = finalGame.awayTeam.stats.score;
+                         draft.matches[matchIndex].gameId = finalGame.id;
                     }
                 });
                 await saveTournament(updatedTournament);
@@ -652,10 +649,8 @@ export default function LiveGamePage() {
             });
         }
         
-        // Step 3: Clean up the live game document
         await deleteLiveGame();
         
-        // Step 4: Redirect the user
         if (finalGame.tournamentId) {
             router.push(`/stats?tournamentId=${finalGame.tournamentId}`);
         } else {
@@ -1083,7 +1078,7 @@ export default function LiveGamePage() {
                 <Button variant="ghost" size="sm" onClick={() => handleChangeQuarter('next')}>P. Sig. <ChevronRight className="ml-1 h-4 w-4"/></Button>
             </div>
             <div className="pt-2 sm:pt-4 border-t w-full max-w-sm text-center">
-                 <Button variant="outline" size="sm" onClick={()={() => setIsClockModalOpen(true)} disabled={game.clockIsRunning}>
+                 <Button variant="outline" size="sm" onClick={() => setIsClockModalOpen(true)} disabled={game.clockIsRunning}>
                     <Settings className="mr-2 h-4 w-4" />
                     Ajustes del Reloj
                 </Button>
@@ -1213,6 +1208,8 @@ export default function LiveGamePage() {
     </>
   );
 }
-
     
 
+
+
+    
