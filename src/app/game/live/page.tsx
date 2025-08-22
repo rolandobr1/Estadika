@@ -91,9 +91,9 @@ function gameReducer(state: Game, action: GameAction): Game {
             
         case 'GAME_END':
              return produce(state, draft => {
+                draft.gameLog.push(action);
                 draft.status = 'FINISHED';
                 draft.clockIsRunning = false;
-                draft.gameLog.push(action);
              });
 
         case 'REOPEN_GAME': {
