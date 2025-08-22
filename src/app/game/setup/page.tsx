@@ -21,6 +21,7 @@ import { defaultAppSettings } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { LoadingModal } from '@/components/ui/loader';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { getPlayers, getTeams } from '@/lib/roster';
 
 // Helper function to create a clean slate for player stats
 const createInitialPlayerStats = (): PlayerStats => ({
@@ -197,33 +198,41 @@ export default function GameSetupPage() {
             setIsLoading(false);
             return;
         }
-        
-        const liveGame = localStorage.getItem('liveGame');
-        if (liveGame) {
-            setGameInProgress(true);
-            setIsLoading(false);
-            return;
-        }
 
-        const storedPlayers = localStorage.getItem('players');
-        const storedTeams = localStorage.getItem('teams');
-        const storedSettings = localStorage.getItem('appSettings');
-
-        if (storedPlayers) setRoster(JSON.parse(storedPlayers));
-        if (storedTeams) setTeams(JSON.parse(storedTeams));
-        if (storedSettings) {
+        async function loadData() {
             try {
-                const parsedSettings: AppSettings = JSON.parse(storedSettings);
-                 setGameSettings(prev => ({ 
-                    ...prev, 
-                    ...(parsedSettings.gameSettings || {})
-                }));
+                const liveGame = localStorage.getItem('liveGame');
+                if (liveGame) {
+                    setGameInProgress(true);
+                    return;
+                }
+
+                const [playersFromDb, teamsFromDb] = await Promise.all([getPlayers(), getTeams()]);
+                setRoster(playersFromDb);
+                setTeams(teamsFromDb);
+
+                const storedSettings = localStorage.getItem('appSettings');
+                if (storedSettings) {
+                    const parsedSettings: AppSettings = JSON.parse(storedSettings);
+                    setGameSettings(prev => ({
+                        ...prev,
+                        ...(parsedSettings.gameSettings || {})
+                    }));
+                }
             } catch (e) {
-                console.error("Could not parse app settings", e);
+                console.error("Could not load data", e);
+                toast({
+                    variant: 'destructive',
+                    title: 'Error al cargar datos',
+                    description: 'No se pudo obtener la plantilla de jugadores y equipos.',
+                });
+            } finally {
+                setIsLoading(false);
             }
         }
-        setIsLoading(false);
-    }, []);
+        
+        loadData();
+    }, [toast]);
     
     const handleLoadTeam = (team: Team, teamType: 'home' | 'away') => {
         const teamPlayers = roster.filter(p => team.playerIds.includes(p.id));
@@ -648,3 +657,5 @@ export default function GameSetupPage() {
         </>
     );
 }
+
+    
