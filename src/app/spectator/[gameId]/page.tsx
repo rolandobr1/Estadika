@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import type { Game } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,45 +16,57 @@ export default function SpectatorPage() {
     const [error, setError] = useState<string | null>(null);
     const [isClient, setIsClient] = useState(false);
 
+    const updateGameFromStorage = useCallback(() => {
+        const gameData = localStorage.getItem('liveGame');
+        if (gameData) {
+            try {
+                const parsedGame = JSON.parse(gameData);
+                if (parsedGame.id === gameId) {
+                    setGame(parsedGame);
+                    setError(null);
+                } else {
+                    setError("Hay otro partido en curso. El marcador solicitado no está disponible.");
+                    setGame(null);
+                }
+            } catch (e) {
+                console.error("Error parsing game data from localStorage", e);
+                setError("No se pudieron cargar los datos del partido.");
+                setGame(null);
+            }
+        } else {
+            setError("El partido no está en curso o el enlace ha expirado.");
+            setGame(null);
+        }
+    }, [gameId]);
+
     useEffect(() => {
         // This effect runs only on the client, after the initial render.
         // This ensures localStorage is available and we avoid hydration errors.
         setIsClient(true);
-    }, []);
 
-    useEffect(() => {
-        if (!isClient || !gameId) {
+        if (typeof window === 'undefined' || !gameId) {
             return;
         }
-
-        const updateGameFromStorage = () => {
-            const gameData = localStorage.getItem('liveGame');
-            if (gameData) {
-                try {
-                    const parsedGame = JSON.parse(gameData);
-                    if (parsedGame.id === gameId) {
-                        setGame(parsedGame);
-                        setError(null);
-                    } else {
-                        setError("Hay otro partido en curso. El marcador solicitado no está disponible.");
-                        setGame(null);
-                    }
-                } catch (e) {
-                    console.error("Error parsing game data from localStorage", e);
-                    setError("No se pudieron cargar los datos del partido.");
-                    setGame(null);
-                }
-            } else {
-                setError("El partido no está en curso o el enlace ha expirado.");
-                setGame(null);
-            }
-        };
 
         updateGameFromStorage();
 
         const handleStorageChange = (event: StorageEvent) => {
             if (event.key === 'liveGame') {
-                updateGameFromStorage();
+                 try {
+                    const newGameData = event.newValue;
+                    if (newGameData) {
+                        const parsedGame = JSON.parse(newGameData);
+                        if (parsedGame.id === gameId) {
+                            setGame(parsedGame);
+                        }
+                    } else {
+                        // Game was cleared from storage
+                        setError("El partido ha finalizado.");
+                        setGame(null);
+                    }
+                } catch (e) {
+                     console.error("Error updating game from storage event", e);
+                }
             }
         };
 
@@ -63,7 +75,7 @@ export default function SpectatorPage() {
         return () => {
             window.removeEventListener('storage', handleStorageChange);
         };
-    }, [isClient, gameId]);
+    }, [gameId, updateGameFromStorage]);
     
     // On the server and during the initial client render, render nothing to guarantee a match.
     if (!isClient) {
