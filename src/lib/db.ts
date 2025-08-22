@@ -1,7 +1,53 @@
 
+
 import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, setDoc, deleteDoc, writeBatch, getDoc, query, where, orderBy, limit } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, deleteDoc, writeBatch, getDoc, query, orderBy, Timestamp } from 'firebase/firestore';
 import type { Player, Team, Tournament, Game } from '@/lib/types';
+import { produce } from 'immer';
+
+// --- Data Conversion Utilities ---
+
+/**
+ * Converts Firestore Timestamps to numbers (milliseconds since epoch).
+ * This function recursively traverses an object and converts any Timestamp fields.
+ */
+function fromFirestore(data: any): any {
+    if (!data) return data;
+    if (Array.isArray(data)) {
+        return data.map(fromFirestore);
+    }
+    if (data instanceof Timestamp) {
+        return data.toMillis();
+    }
+    if (typeof data === 'object') {
+        const newData: { [key: string]: any } = {};
+        for (const key in data) {
+            newData[key] = fromFirestore(data[key]);
+        }
+        return newData;
+    }
+    return data;
+}
+
+/**
+ * Prepares data for Firestore by ensuring there are no undefined values,
+ * which Firestore cannot handle. This is a shallow conversion.
+ * For nested objects, a more complex function would be needed if they could contain undefined.
+ */
+function toFirestore(data: any): any {
+    if (typeof data !== 'object' || data === null) return data;
+    const firestoreData: { [key: string]: any } = {};
+    for (const key in data) {
+        const value = data[key];
+        if (value !== undefined) {
+             // For simplicity, we are not converting nested objects here.
+             // This assumes that nested structures like 'settings' or 'teams' are clean.
+            firestoreData[key] = value;
+        }
+    }
+    return firestoreData;
+}
+
 
 // Collection Names
 const PLAYERS_COLLECTION = 'players';
@@ -15,13 +61,13 @@ const LIVE_GAME_COLLECTION = 'live-game'; // For the single live game
 export async function getPlayers(): Promise<Player[]> {
     const playersCol = collection(db, PLAYERS_COLLECTION);
     const playerSnapshot = await getDocs(playersCol);
-    const playerList = playerSnapshot.docs.map(doc => doc.data() as Player);
+    const playerList = playerSnapshot.docs.map(doc => fromFirestore(doc.data()) as Player);
     return playerList;
 }
 
 export async function savePlayer(player: Player): Promise<void> {
     const playerRef = doc(db, PLAYERS_COLLECTION, player.id);
-    await setDoc(playerRef, player, { merge: true });
+    await setDoc(playerRef, toFirestore(player), { merge: true });
 }
 
 export async function deletePlayers(playerIds: string[]): Promise<void> {
@@ -31,7 +77,6 @@ export async function deletePlayers(playerIds: string[]): Promise<void> {
         batch.delete(playerRef);
     });
 
-    // Also remove player from any teams they are in
     const teams = await getTeams();
     teams.forEach(team => {
         const newPlayerIds = team.playerIds.filter(pid => !playerIds.includes(pid));
@@ -54,7 +99,7 @@ export async function importPlayers(players: Player[]): Promise<number> {
     let newItemsCount = 0;
     playerDocs.forEach((docSnapshot, index) => {
         if (!docSnapshot.exists()) {
-            batch.set(docSnapshot.ref, players[index]);
+            batch.set(docSnapshot.ref, toFirestore(players[index]));
             newItemsCount++;
         }
     });
@@ -68,13 +113,13 @@ export async function importPlayers(players: Player[]): Promise<number> {
 export async function getTeams(): Promise<Team[]> {
     const teamsCol = collection(db, TEAMS_COLLECTION);
     const teamSnapshot = await getDocs(teamsCol);
-    const teamList = teamSnapshot.docs.map(doc => doc.data() as Team);
+    const teamList = teamSnapshot.docs.map(doc => fromFirestore(doc.data()) as Team);
     return teamList;
 }
 
 export async function saveTeam(team: Team): Promise<void> {
     const teamRef = doc(db, TEAMS_COLLECTION, team.id);
-    await setDoc(teamRef, team, { merge: true });
+    await setDoc(teamRef, toFirestore(team), { merge: true });
 }
 
 export async function deleteTeams(teamIds: string[]): Promise<void> {
@@ -96,7 +141,7 @@ export async function importTeams(teams: Team[]): Promise<number> {
     let newItemsCount = 0;
     teamDocs.forEach((docSnapshot, index) => {
         if (!docSnapshot.exists()) {
-            batch.set(docSnapshot.ref, teams[index]);
+            batch.set(docSnapshot.ref, toFirestore(teams[index]));
             newItemsCount++;
         }
     });
@@ -111,19 +156,19 @@ export async function importTeams(teams: Team[]): Promise<number> {
 export async function getTournaments(): Promise<Tournament[]> {
     const tournamentsCol = collection(db, TOURNAMENTS_COLLECTION);
     const tournamentSnapshot = await getDocs(tournamentsCol);
-    const tournamentList = tournamentSnapshot.docs.map(doc => doc.data() as Tournament);
+    const tournamentList = tournamentSnapshot.docs.map(doc => fromFirestore(doc.data()) as Tournament);
     return tournamentList;
 }
 
 export async function getTournamentById(id: string): Promise<Tournament | null> {
     const tournamentRef = doc(db, TOURNAMENTS_COLLECTION, id);
     const docSnap = await getDoc(tournamentRef);
-    return docSnap.exists() ? (docSnap.data() as Tournament) : null;
+    return docSnap.exists() ? (fromFirestore(docSnap.data()) as Tournament) : null;
 }
 
 export async function saveTournament(tournament: Tournament): Promise<void> {
     const tournamentRef = doc(db, TOURNAMENTS_COLLECTION, tournament.id);
-    await setDoc(tournamentRef, tournament, { merge: true });
+    await setDoc(tournamentRef, toFirestore(tournament), { merge: true });
 }
 
 export async function deleteTournament(tournamentId: string): Promise<void> {
@@ -134,54 +179,35 @@ export async function deleteTournament(tournamentId: string): Promise<void> {
 
 // --- Game Functions ---
 
-/**
- * Saves a single live game document.
- * The ID is fixed to 'current' to ensure only one live game exists.
- */
 export async function saveLiveGame(game: Game): Promise<void> {
     const liveGameRef = doc(db, LIVE_GAME_COLLECTION, 'current');
-    await setDoc(liveGameRef, game);
+    await setDoc(liveGameRef, toFirestore(game));
 }
 
-/**
- * Retrieves the current live game, if one exists.
- */
 export async function getLiveGame(): Promise<Game | null> {
     const liveGameRef = doc(db, LIVE_GAME_COLLECTION, 'current');
     const docSnap = await getDoc(liveGameRef);
-    return docSnap.exists() ? (docSnap.data() as Game) : null;
+    return docSnap.exists() ? (fromFirestore(docSnap.data()) as Game) : null;
 }
 
-/**
- * Deletes the current live game document.
- */
 export async function deleteLiveGame(): Promise<void> {
     const liveGameRef = doc(db, LIVE_GAME_COLLECTION, 'current');
     await deleteDoc(liveGameRef);
 }
 
-/**
- * Saves a finished game to the general history collection.
- */
 export async function saveFinishedGame(game: Game): Promise<void> {
     const gameRef = doc(db, GAMES_COLLECTION, game.id);
-    await setDoc(gameRef, game);
+    await setDoc(gameRef, toFirestore(game));
 }
 
-/**
- * Retrieves all finished games, sorted by date descending.
- */
 export async function getFinishedGames(): Promise<Game[]> {
     const gamesCol = collection(db, GAMES_COLLECTION);
     const q = query(gamesCol, orderBy('date', 'desc'));
     const gamesSnapshot = await getDocs(q);
-    const gamesList = gamesSnapshot.docs.map(doc => doc.data() as Game);
+    const gamesList = gamesSnapshot.docs.map(doc => fromFirestore(doc.data()) as Game);
     return gamesList;
 }
 
-/**
- * Deletes one or more finished games from the history.
- */
 export async function deleteFinishedGames(gameIds: string[]): Promise<void> {
     const batch = writeBatch(db);
     gameIds.forEach(id => {
@@ -191,9 +217,6 @@ export async function deleteFinishedGames(gameIds: string[]): Promise<void> {
     await batch.commit();
 }
 
-/**
- * Imports multiple games into the history, avoiding duplicates.
- */
 export async function importGames(games: Game[]): Promise<number> {
     const batch = writeBatch(db);
     const gamesCol = collection(db, GAMES_COLLECTION);
@@ -204,7 +227,7 @@ export async function importGames(games: Game[]): Promise<number> {
     let newItemsCount = 0;
     gameDocs.forEach((docSnapshot, index) => {
         if (!docSnapshot.exists()) {
-            batch.set(docSnapshot.ref, games[index]);
+            batch.set(docSnapshot.ref, toFirestore(games[index]));
             newItemsCount++;
         }
     });
@@ -212,4 +235,3 @@ export async function importGames(games: Game[]): Promise<number> {
     await batch.commit();
     return newItemsCount;
 }
-
