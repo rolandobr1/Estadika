@@ -519,7 +519,7 @@ export default function LiveGamePage() {
             const liveGame = await getLiveGame();
             if (liveGame) {
                 setBaseGame(liveGame);
-                if (liveGame.status === 'FINISHED') { // Game was resumed
+                if (liveGame.status === 'FINISHED') { // Game was resumed from history
                     dispatch({ type: 'REOPEN_GAME', id: `action_${Date.now()}`, timestamp: Date.now(), description: 'Game re-opened from history.', payload: liveGame });
                 } else { // New game
                     dispatch({ type: 'GAME_START', id: `action_${Date.now()}`, timestamp: Date.now(), description: 'Game loaded from storage.', payload: liveGame });
@@ -585,113 +585,109 @@ export default function LiveGamePage() {
   }, [teamsSwapped, activeTab]);
 
 
-  const handleFinishGame = () => {
-    if (typeof window === 'undefined') return;
+  const handleFinishGame = async () => {
+    if (typeof window === 'undefined' || isFinishingGame) return;
 
     setIsFinishingGame(true);
+
+    // Create the final game state object directly.
+    const finalGame = produce(game, draft => {
+        draft.status = 'FINISHED';
+        draft.clockIsRunning = false;
+        // Ensure the GAME_END action is in the log of the object we are about to save.
+        const endAction: GameAction = {
+            id: `action_${Date.now()}`,
+            type: 'GAME_END',
+            timestamp: Date.now(),
+            description: 'El partido ha finalizado.',
+            payload: {
+                quarter: draft.currentQuarter,
+                gameClock: draft.gameClock,
+                homeScore: draft.homeTeam.stats.score,
+                awayScore: draft.awayTeam.stats.score,
+            },
+        };
+        draft.gameLog.push(endAction);
+    });
     
-    const action: GameAction = {
-        id: `action_${Date.now()}`,
-        type: 'GAME_END',
-        timestamp: Date.now(),
-        description: 'El partido ha finalizado.',
-        payload: {
-            quarter: game.currentQuarter,
-            gameClock: game.gameClock,
-            homeScore: game.homeTeam.stats.score,
-            awayScore: game.awayTeam.stats.score,
-        },
-    };
-    dispatch(action);
-  };
-  
-  useEffect(() => {
-    if (game.status !== 'FINISHED' || isLoading || !isFinishingGame) {
-        return;
-    }
-    
-    const saveAndCleanup = async () => {
-        try {
-            await saveFinishedGame(game);
+    try {
+        // Step 1: Save the final game object to the history collection.
+        await saveFinishedGame(finalGame);
 
-            if (game.tournamentId && game.matchId) {
-                const tournamentToUpdate = await getTournamentById(game.tournamentId);
+        // Step 2: If it's a tournament game, update the tournament stats.
+        if (finalGame.tournamentId && finalGame.matchId) {
+            const tournamentToUpdate = await getTournamentById(finalGame.tournamentId);
 
-                if (tournamentToUpdate) {
-                    const updatedTournament = produce(tournamentToUpdate, (draft: Tournament) => {
-                       const match = draft.matches.find(m => m.id === game.matchId);
-                        if (match) {
-                            match.status = 'FINISHED';
-                            match.team1.score = game.homeTeam.stats.score;
-                            match.team2.score = game.awayTeam.stats.score;
-                            match.gameId = game.id;
-                        }
-                        
-                        // Recalculate all team stats for the tournament to ensure consistency
-                        draft.teams.forEach(team => {
-                            team.wins = 0;
-                            team.losses = 0;
-                            team.pointsFor = 0;
-                            team.pointsAgainst = 0;
+            if (tournamentToUpdate) {
+                const updatedTournament = produce(tournamentToUpdate, (draft: Tournament) => {
+                    const match = draft.matches.find(m => m.id === finalGame.matchId);
+                    if (match) {
+                        match.status = 'FINISHED';
+                        match.team1.score = finalGame.homeTeam.stats.score;
+                        match.team2.score = finalGame.awayTeam.stats.score;
+                        match.gameId = finalGame.id;
+                    }
+                    
+                    // Recalculate all team stats for the tournament to ensure consistency
+                    draft.teams.forEach(team => {
+                        team.wins = 0;
+                        team.losses = 0;
+                        team.pointsFor = 0;
+                        team.pointsAgainst = 0;
 
-                            draft.matches.forEach(m => {
-                                if (m.status !== 'FINISHED' || (m.team1.id !== team.id && m.team2.id !== team.id)) {
-                                    return;
-                                }
+                        draft.matches.forEach(m => {
+                            if (m.status !== 'FINISHED' || (m.team1.id !== team.id && m.team2.id !== team.id)) {
+                                return;
+                            }
 
-                                const isTeam1 = m.team1.id === team.id;
-                                const teamScore = isTeam1 ? m.team1.score! : m.team2.score!;
-                                const opponentScore = isTeam1 ? m.team2.score! : m.team1.score!;
+                            const isTeam1 = m.team1.id === team.id;
+                            const teamScore = isTeam1 ? m.team1.score! : m.team2.score!;
+                            const opponentScore = isTeam1 ? m.team2.score! : m.team1.score!;
 
-                                team.pointsFor += teamScore;
-                                team.pointsAgainst += opponentScore;
+                            team.pointsFor += teamScore;
+                            team.pointsAgainst += opponentScore;
 
-                                if (teamScore > opponentScore) {
-                                    team.wins++;
-                                } else if (opponentScore > teamScore) {
-                                    team.losses++;
-                                }
-                            });
+                            if (teamScore > opponentScore) {
+                                team.wins++;
+                            } else if (opponentScore > teamScore) {
+                                team.losses++;
+                            }
                         });
                     });
-
-                    await saveTournament(updatedTournament);
-
-                    toast({
-                        title: "Partido de Torneo Finalizado",
-                        description: "Los resultados han sido guardados en el torneo y en el historial general.",
-                    });
-                }
-            } else {
-                 toast({
-                    title: "Partido Guardado",
-                    description: "El partido ha sido guardado en el historial general.",
+                });
+                await saveTournament(updatedTournament);
+                toast({
+                    title: "Partido de Torneo Finalizado",
+                    description: "Los resultados han sido guardados en el torneo y en el historial general.",
                 });
             }
-            
-            await deleteLiveGame();
-
-            if (game.tournamentId) {
-                router.push(`/stats?tournamentId=${game.tournamentId}`);
-            } else {
-                router.push('/history');
-            }
-
-        } catch (error) {
-            console.error("Error finishing game: ", error);
+        } else {
             toast({
-                title: "Error al guardar",
-                description: "No se pudo guardar el partido. Inténtalo de nuevo.",
-                variant: 'destructive',
+                title: "Partido Guardado",
+                description: "El partido ha sido guardado en el historial general.",
             });
-            setIsFinishingGame(false); // Allow user to try again
         }
-    };
-    
-    saveAndCleanup();
-      
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [game.status, isFinishingGame]);
+        
+        // Step 3: Clean up the live game.
+        await deleteLiveGame();
+        
+        // Step 4: Navigate away.
+        if (finalGame.tournamentId) {
+            router.push(`/stats?tournamentId=${finalGame.tournamentId}`);
+        } else {
+            router.push('/history');
+        }
+
+    } catch (error) {
+        console.error("Error finishing game: ", error);
+        toast({
+            title: "Error al guardar",
+            description: "No se pudo guardar el partido. Inténtalo de nuevo.",
+            variant: 'destructive',
+        });
+        setIsFinishingGame(false); // Allow user to try again
+    }
+  };
 
   const createGameAction = (
       type: GameAction['type'],
