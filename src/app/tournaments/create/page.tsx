@@ -181,24 +181,17 @@ export default function CreateTournamentPage() {
         matches = generateSchedule(Array.from(selectedTeamIds), tournamentId, tournamentFormat, numRounds);
     }
     
-    // Convert minutes to seconds for storage
-    const finalGameSettings = {
-        ...gameSettings,
-        quarterLength: gameSettings.quarterLength * 60,
-        overtimeLength: gameSettings.overtimeLength * 60,
-    };
-
     const newTournament: Tournament = {
       id: tournamentId,
       name: tournamentName,
       teams: participatingTeams,
       matches,
-      gameSettings: finalGameSettings,
+      gameSettings,
       format: tournamentFormat,
       rounds: numRounds,
       playoffSettings: {
         enabled: playoffsEnabled,
-        finalFormat: playoffsEnabled ? finalFormat : undefined,
+        ...(playoffsEnabled && { finalFormat: finalFormat }),
       }
     };
     

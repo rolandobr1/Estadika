@@ -8,8 +8,9 @@ import { produce } from 'immer';
 // --- Data Conversion Utilities ---
 
 /**
- * Converts Firestore Timestamps to numbers (milliseconds since epoch).
- * This function recursively traverses an object and converts any Timestamp fields.
+ * Converts Firestore Timestamps to numbers (milliseconds since epoch)
+ * and removes any `undefined` values from an object before sending it to Firestore.
+ * This function recursively traverses an object/array.
  */
 function fromFirestore(data: any): any {
     if (!data) return data;
@@ -30,22 +31,30 @@ function fromFirestore(data: any): any {
 }
 
 /**
- * Prepares data for Firestore by ensuring there are no undefined values,
- * which Firestore cannot handle. This is a shallow conversion.
- * For nested objects, a more complex function would be needed if they could contain undefined.
+ * Prepares data for Firestore by recursively removing any fields with `undefined` values.
+ * Firestore cannot handle `undefined`.
  */
 function toFirestore(data: any): any {
-    if (typeof data !== 'object' || data === null) return data;
-    const firestoreData: { [key: string]: any } = {};
-    for (const key in data) {
-        const value = data[key];
-        if (value !== undefined) {
-             // For simplicity, we are not converting nested objects here.
-             // This assumes that nested structures like 'settings' or 'teams' are clean.
-            firestoreData[key] = value;
-        }
+  if (data === null || typeof data !== 'object') {
+    return data;
+  }
+
+  if (data instanceof Timestamp) {
+      return data;
+  }
+
+  if (Array.isArray(data)) {
+    return data.map(toFirestore);
+  }
+  
+  const firestoreData: { [key: string]: any } = {};
+  for (const key in data) {
+    const value = data[key];
+    if (value !== undefined) {
+      firestoreData[key] = toFirestore(value);
     }
-    return firestoreData;
+  }
+  return firestoreData;
 }
 
 
