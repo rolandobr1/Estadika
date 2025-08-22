@@ -17,6 +17,8 @@ export default function SpectatorPage() {
     const [isClient, setIsClient] = useState(false);
 
     useEffect(() => {
+        // This effect runs only on the client, after the initial render.
+        // This ensures localStorage is available and we avoid hydration errors.
         setIsClient(true);
     }, []);
 
@@ -34,17 +36,15 @@ export default function SpectatorPage() {
                         setGame(parsedGame);
                         setError(null);
                     } else {
-                        // If there's a live game but it's not the one we're watching, show an error.
-                        setError("Hay otro partido en curso. El marcador solicitado no está disponible en este momento.");
+                        setError("Hay otro partido en curso. El marcador solicitado no está disponible.");
                         setGame(null);
                     }
-                } catch(e) {
+                } catch (e) {
                     console.error("Error parsing game data from localStorage", e);
                     setError("No se pudieron cargar los datos del partido.");
                     setGame(null);
                 }
             } else {
-                 // If no live game is found in storage, we can assume it ended or link is old
                 setError("El partido no está en curso o el enlace ha expirado.");
                 setGame(null);
             }
@@ -65,10 +65,16 @@ export default function SpectatorPage() {
         };
     }, [isClient, gameId]);
     
+    // On the server and during the initial client render, render nothing to guarantee a match.
     if (!isClient) {
-        return null; // Render nothing on the server to avoid hydration errors
+        return null;
     }
 
+    // After client has mounted, show loading state until game or error is determined.
+    if (!game && !error) {
+        return <LoadingModal />;
+    }
+    
     const getPeriodDisplay = () => {
         if (!game) return '';
         if (game.isTimeoutActive) {

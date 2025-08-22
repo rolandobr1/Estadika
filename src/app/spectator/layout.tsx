@@ -4,6 +4,7 @@ import '../globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { cn } from '@/lib/utils';
 import { Inter } from 'next/font/google';
+import { ThemeProvider } from '@/components/theme-provider';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
@@ -12,8 +13,10 @@ export const metadata: Metadata = {
   description: 'Marcador en vivo del partido.',
 };
 
-
-export default function SpectatorLayout({
+// This is a new root layout specifically for the spectator section.
+// It does NOT include the main <Header />, isolating this page
+// to prevent hydration errors caused by conflicting layouts.
+export default function SpectatorRootLayout({
   children,
 }: {
   children: React.ReactNode;
@@ -21,8 +24,15 @@ export default function SpectatorLayout({
   return (
     <html lang="es" suppressHydrationWarning>
        <body className={cn("min-h-screen bg-background font-body antialiased", inter.variable)}>
-        {children}
-        <Toaster />
+         <ThemeProvider
+          attribute="class"
+          defaultTheme="dark"
+          enableSystem={false}
+          disableTransitionOnChange
+        >
+          {children}
+          <Toaster />
+        </ThemeProvider>
       </body>
     </html>
   );
