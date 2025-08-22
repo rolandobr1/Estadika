@@ -62,7 +62,6 @@ function gameReducer(state: Game, action: GameAction): Game {
         case 'GAME_START':
             return produce(state, draft => {
                 Object.assign(draft, action.payload);
-                Object.assign(draft, recalculateGameStateFromLog(draft, draft.gameLog));
             });
         
         case 'TIMER_CHANGE':
@@ -540,20 +539,8 @@ export default function LiveGamePage() {
         if (payload.status === 'FINISHED') {
             dispatch({ type: 'REOPEN_GAME', id: `action_${Date.now()}`, timestamp: Date.now(), description: 'Game re-opened from history.', payload });
         } else {
-            const initialAction: GameAction = {
-                type: 'GAME_START', 
-                id: `action_${Date.now()}`, 
-                timestamp: Date.now(), 
-                description: 'Game loaded from storage.',
-                payload: {
-                    ...payload,
-                    quarter: payload.currentQuarter,
-                    gameClock: payload.gameClock,
-                    homeScore: payload.homeTeam.stats.score,
-                    awayScore: payload.awayTeam.stats.score
-                }
-            };
-            dispatch(initialAction);
+            // Directly dispatch the payload for a new or in-progress game
+            dispatch({ type: 'GAME_START', id: `action_${Date.now()}`, timestamp: Date.now(), description: 'Game loaded from storage.', payload });
         }
     } else {
         router.replace('/game/setup');
@@ -1283,3 +1270,5 @@ export default function LiveGamePage() {
   );
 }
 
+
+    
