@@ -91,7 +91,19 @@ function gameReducer(state: Game, action: GameAction): Game {
             
         case 'GAME_END':
              return produce(state, draft => {
-                draft.gameLog.push(action);
+                const endAction: GameAction = {
+                    id: `action_${Date.now()}`,
+                    type: 'GAME_END',
+                    timestamp: Date.now(),
+                    description: 'El partido ha finalizado.',
+                    payload: {
+                        quarter: draft.currentQuarter,
+                        gameClock: draft.gameClock,
+                        homeScore: draft.homeTeam.stats.score,
+                        awayScore: draft.awayTeam.stats.score,
+                    },
+                };
+                draft.gameLog.push(endAction);
                 draft.status = 'FINISHED';
                 draft.clockIsRunning = false;
              });
@@ -521,7 +533,7 @@ export default function LiveGamePage() {
                 setBaseGame(liveGame);
                 if (liveGame.status === 'FINISHED') { // Game was resumed from history
                     dispatch({ type: 'REOPEN_GAME', id: `action_${Date.now()}`, timestamp: Date.now(), description: 'Game re-opened from history.', payload: liveGame });
-                } else { // New game
+                } else { // New game or live game
                     dispatch({ type: 'GAME_START', id: `action_${Date.now()}`, timestamp: Date.now(), description: 'Game loaded from storage.', payload: liveGame });
                 }
             } else {
@@ -590,11 +602,9 @@ export default function LiveGamePage() {
 
     setIsFinishingGame(true);
 
-    // Create the final game state object directly.
     const finalGame = produce(game, draft => {
         draft.status = 'FINISHED';
         draft.clockIsRunning = false;
-        // Ensure the GAME_END action is in the log of the object we are about to save.
         const endAction: GameAction = {
             id: `action_${Date.now()}`,
             type: 'GAME_END',
@@ -611,10 +621,8 @@ export default function LiveGamePage() {
     });
     
     try {
-        // Step 1: Save the final game object to the history collection.
         await saveFinishedGame(finalGame);
 
-        // Step 2: If it's a tournament game, update the tournament stats.
         if (finalGame.tournamentId && finalGame.matchId) {
             const tournamentToUpdate = await getTournamentById(finalGame.tournamentId);
 
@@ -628,7 +636,6 @@ export default function LiveGamePage() {
                         match.gameId = finalGame.id;
                     }
                     
-                    // Recalculate all team stats for the tournament to ensure consistency
                     draft.teams.forEach(team => {
                         team.wins = 0;
                         team.losses = 0;
@@ -639,10 +646,14 @@ export default function LiveGamePage() {
                             if (m.status !== 'FINISHED' || (m.team1.id !== team.id && m.team2.id !== team.id)) {
                                 return;
                             }
-
+                            
                             const isTeam1 = m.team1.id === team.id;
-                            const teamScore = isTeam1 ? m.team1.score! : m.team2.score!;
-                            const opponentScore = isTeam1 ? m.team2.score! : m.team1.score!;
+                            const teamScore = isTeam1 ? (m.team1.score ?? 0) : (m.team2.score ?? 0);
+                            const opponentScore = isTeam1 ? (m.team2.score ?? 0) : (m.team1.score ?? 0);
+
+                            if (typeof teamScore !== 'number' || typeof opponentScore !== 'number') {
+                                return;
+                            }
 
                             team.pointsFor += teamScore;
                             team.pointsAgainst += opponentScore;
@@ -668,10 +679,8 @@ export default function LiveGamePage() {
             });
         }
         
-        // Step 3: Clean up the live game.
         await deleteLiveGame();
         
-        // Step 4: Navigate away.
         if (finalGame.tournamentId) {
             router.push(`/stats?tournamentId=${finalGame.tournamentId}`);
         } else {
@@ -685,7 +694,7 @@ export default function LiveGamePage() {
             description: "No se pudo guardar el partido. Inténtalo de nuevo.",
             variant: 'destructive',
         });
-        setIsFinishingGame(false); // Allow user to try again
+        setIsFinishingGame(false);
     }
   };
 
