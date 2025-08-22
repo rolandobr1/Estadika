@@ -10,7 +10,7 @@ import { PiUserSwitchBold } from "react-icons/pi";
 import { IoStatsChart } from "react-icons/io5";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
-import type { Game, Player, TeamInGame, StatType, PlayerStats, GameAction, AppSettings, ActionType } from '@/lib/types';
+import type { Game, Player, TeamInGame, StatType, PlayerStats, GameAction, AppSettings, ActionType, Tournament, TournamentTeam } from '@/lib/types';
 import { defaultAppSettings } from '@/lib/types';
 import { createInitialGame, recalculateGameStateFromLog, applyActionToGameState } from '@/lib/game-utils';
 import { cn } from '@/lib/utils';
@@ -630,40 +630,41 @@ export default function LiveGamePage() {
 
                 if (tournamentIndex !== -1) {
                     const tournamentToUpdate = allTournaments[tournamentIndex];
-                    const updatedTournament = produce(tournamentToUpdate, (draft: any) => {
-                       const match = draft.matches.find((m: any) => m.id === finalGameData.matchId);
+                    const updatedTournament = produce(tournamentToUpdate, (draft: Tournament) => {
+                       const match = draft.matches.find(m => m.id === finalGameData.matchId);
                         if (match) {
-                            const homeTeam = draft.teams.find((t: any) => t.id === match.team1.id);
-                            const awayTeam = draft.teams.find((t: any) => t.id === match.team2.id);
-
-                            if (homeTeam && awayTeam) {
-                                if (finalGameData.previousScores) {
-                                    const { home: prevHome, away: prevAway } = finalGameData.previousScores;
-                                    homeTeam.pointsFor -= prevHome;
-                                    homeTeam.pointsAgainst -= prevAway;
-                                    awayTeam.pointsFor -= prevAway;
-                                    awayTeam.pointsAgainst -= prevHome;
-                                    if (prevHome > prevAway) { homeTeam.wins--; awayTeam.losses--; } 
-                                    else if (prevAway > prevHome) { awayTeam.wins--; homeTeam.losses--; }
-                                }
-                                
-                                const newHomeScore = finalGameData.homeTeam.stats.score;
-                                const newAwayScore = finalGameData.awayTeam.stats.score;
-
-                                match.status = 'FINISHED';
-                                match.team1.score = newHomeScore;
-                                match.team2.score = newAwayScore;
-                                match.gameId = finalGameData.id;
-                                
-                                homeTeam.pointsFor += newHomeScore;
-                                homeTeam.pointsAgainst += newAwayScore;
-                                awayTeam.pointsFor += newAwayScore;
-                                awayTeam.pointsAgainst += newHomeScore;
-
-                                if (newHomeScore > newAwayScore) { homeTeam.wins++; awayTeam.losses++; }
-                                else if (newAwayScore > newHomeScore) { homeTeam.losses++; awayTeam.wins++; }
-                            }
+                            match.status = 'FINISHED';
+                            match.team1.score = finalGameData.homeTeam.stats.score;
+                            match.team2.score = finalGameData.awayTeam.stats.score;
+                            match.gameId = finalGameData.id;
                         }
+                        
+                        // Recalculate all team stats for the tournament to ensure consistency
+                        draft.teams.forEach(team => {
+                            team.wins = 0;
+                            team.losses = 0;
+                            team.pointsFor = 0;
+                            team.pointsAgainst = 0;
+
+                            draft.matches.forEach(m => {
+                                if (m.status !== 'FINISHED' || (m.team1.id !== team.id && m.team2.id !== team.id)) {
+                                    return;
+                                }
+
+                                const isTeam1 = m.team1.id === team.id;
+                                const teamScore = isTeam1 ? m.team1.score! : m.team2.score!;
+                                const opponentScore = isTeam1 ? m.team2.score! : m.team1.score!;
+
+                                team.pointsFor += teamScore;
+                                team.pointsAgainst += opponentScore;
+
+                                if (teamScore > opponentScore) {
+                                    team.wins++;
+                                } else if (opponentScore > teamScore) {
+                                    team.losses++;
+                                }
+                            });
+                        });
                     });
                     await saveTournament(updatedTournament);
                     toast({
