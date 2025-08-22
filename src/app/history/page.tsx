@@ -239,6 +239,11 @@ function HistoryContent() {
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
   const importFileRef = useRef<HTMLInputElement>(null);
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   const searchParams = useSearchParams();
   const gameIdToShow = searchParams.get('gameId');
@@ -462,7 +467,7 @@ function HistoryContent() {
             <h1 className="text-3xl font-bold tracking-tight font-headline">Historial de Juegos</h1>
             <p className="text-muted-foreground">Revisa estadísticas y resúmenes de tus juegos pasados.</p>
         </div>
-        {selectedCount > 0 && (
+        {isClient && selectedCount > 0 && (
             <div className="flex items-center gap-2">
                 <span className="text-sm font-medium">{selectedCount} seleccionado{selectedCount > 1 ? 's' : ''}</span>
                 <AlertDialog>
@@ -508,10 +513,11 @@ function HistoryContent() {
           <div className="flex items-center p-4 border-b bg-muted/50">
              <Checkbox
                 id="select-all-games"
-                checked={selectedGameIds.size === filteredHistory.length && filteredHistory.length > 0}
+                checked={isClient && selectedGameIds.size === filteredHistory.length && filteredHistory.length > 0}
                 onCheckedChange={() => handleToggleSelection('', true)}
                 aria-label="Seleccionar todos los partidos"
                 className="mr-4"
+                disabled={!isClient}
              />
              <Label htmlFor="select-all-games" className="text-sm font-medium">
                 Seleccionar todo
@@ -519,14 +525,15 @@ function HistoryContent() {
           </div>
           <div className="space-y-0">
             {filteredHistory.map((game) => (
-                <div key={game.id} className={`p-4 grid grid-cols-1 md:grid-cols-[auto_1fr_auto] items-center gap-4 border-b last:border-b-0 transition-colors ${selectedGameIds.has(game.id) ? 'bg-primary/5' : 'hover:bg-muted/50'}`}>
+                <div key={game.id} className={`p-4 grid grid-cols-1 md:grid-cols-[auto_1fr_auto] items-center gap-4 border-b last:border-b-0 transition-colors ${isClient && selectedGameIds.has(game.id) ? 'bg-primary/5' : 'hover:bg-muted/50'}`}>
                     <div className="flex items-center">
                         <Checkbox
                             id={`select-game-${game.id}`}
-                            checked={selectedGameIds.has(game.id)}
+                            checked={isClient && selectedGameIds.has(game.id)}
                             onCheckedChange={() => handleToggleSelection(game.id)}
                             aria-label={`Seleccionar partido ${game.id}`}
                             className="mr-4"
+                            disabled={!isClient}
                         />
                          <div className="md:col-span-2">
                           <div className="flex items-center gap-4">
