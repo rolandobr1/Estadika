@@ -21,7 +21,7 @@ import { defaultAppSettings } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { LoadingModal } from '@/components/ui/loader';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { getPlayers, getTeams } from '@/lib/roster';
+import { getPlayers, getTeams, saveLiveGame, getLiveGame } from '@/lib/db';
 
 // Helper function to create a clean slate for player stats
 const createInitialPlayerStats = (): PlayerStats => ({
@@ -169,7 +169,7 @@ export default function GameSetupPage() {
     const router = useRouter();
     const { toast } = useToast();
 
-    // Data from localStorage
+    // Data from DB
     const [roster, setRoster] = useState<Player[]>([]);
     const [teams, setTeams] = useState<Team[]>([]);
     
@@ -201,7 +201,7 @@ export default function GameSetupPage() {
 
         async function loadData() {
             try {
-                const liveGame = localStorage.getItem('liveGame');
+                const liveGame = await getLiveGame();
                 if (liveGame) {
                     setGameInProgress(true);
                     return;
@@ -270,11 +270,11 @@ export default function GameSetupPage() {
         }));
     };
     
-    const handleStartGame = () => {
-        if (typeof window !== 'undefined' && localStorage.getItem('liveGame')) {
-            setGameInProgress(true);
+    const handleStartGame = async () => {
+        if (gameInProgress) {
             return;
         }
+
         if (homePlayers.length < 1 || awayPlayers.length < 1) {
             setError("Ambos equipos deben tener al menos un jugador seleccionado.");
             return;
@@ -345,13 +345,23 @@ export default function GameSetupPage() {
 
         newGame.homeTeam.stats.timeouts = initialTimeouts;
         newGame.awayTeam.stats.timeouts = initialTimeouts;
-
-        localStorage.setItem('liveGame', JSON.stringify(newGame));
-        toast({
-            title: "¡Partido Creado!",
-            description: "Todo listo. ¡Que comience el juego!",
-        });
-        router.push('/game/live');
+        
+        try {
+            await saveLiveGame(newGame);
+            toast({
+                title: "¡Partido Creado!",
+                description: "Todo listo. ¡Que comience el juego!",
+            });
+            router.push('/game/live');
+        } catch (error) {
+            console.error("Error saving live game:", error);
+            toast({
+                title: "Error al Guardar",
+                description: "No se pudo iniciar el partido. Inténtalo de nuevo.",
+                variant: 'destructive',
+            });
+            setIsStartingGame(false);
+        }
     };
 
     const TeamCard = ({ side }: { side: 'home' | 'away' }) => {
@@ -657,5 +667,3 @@ export default function GameSetupPage() {
         </>
     );
 }
-
-    

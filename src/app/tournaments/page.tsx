@@ -21,7 +21,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { LoadingModal } from '@/components/ui/loader';
-import { getTournaments } from '@/lib/roster';
+import { getTournaments } from '@/lib/db';
 
 export default function TournamentsPage() {
   const [tournaments, setTournaments] = useState<Tournament[]>([]);

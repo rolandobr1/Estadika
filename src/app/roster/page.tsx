@@ -22,7 +22,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { cn } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
 import { LoadingModal } from '@/components/ui/loader';
-import { getPlayers, savePlayer, deletePlayers as deletePlayersFromDb, importPlayers, getTeams, saveTeam, deleteTeams as deleteTeamsFromDb, importTeams } from '@/lib/roster';
+import { getPlayers, savePlayer, deletePlayers as deletePlayersFromDb, importPlayers, getTeams, saveTeam, deleteTeams as deleteTeamsFromDb, importTeams } from '@/lib/db';
 
 const playerSchema = z.object({
   id: z.string().optional(),
@@ -907,5 +907,3 @@ export default function RosterPage() {
     </>
   );
 }
-
-    

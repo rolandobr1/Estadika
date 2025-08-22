@@ -20,7 +20,7 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { LoadingModal } from '@/components/ui/loader';
-import { getTeams, getPlayers, saveTournament } from '@/lib/roster';
+import { getTeams, getPlayers, saveTournament } from '@/lib/db';
 
 type ScheduleGenerationOption = 'random' | 'manual';
 
@@ -489,4 +489,3 @@ export default function CreateTournamentPage() {
     </div>
   );
 }
-

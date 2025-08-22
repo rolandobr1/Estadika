@@ -26,21 +26,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Input } from '@/components/ui/input';
 import { LoadingModal } from '@/components/ui/loader';
-
-// Function to save state to localStorage
-const saveState = (state: Game) => {
-  if (typeof window === 'undefined' || !state.id) return;
-  try {
-    const serializedState = JSON.stringify(state);
-    // For resuming game
-    localStorage.setItem('liveGame', serializedState);
-    // For spectator view
-    localStorage.setItem(`liveGame_${state.id}`, serializedState);
-  } catch (e: any) {
-    console.warn("Could not save game state.", e);
-  }
-};
-
+import { getLiveGame, saveFinishedGame, deleteLiveGame, getTournaments, saveTournament } from '@/lib/db';
 
 // Reducer to manage game state by processing actions and updating the log
 function gameReducer(state: Game, action: GameAction): Game {
@@ -527,34 +513,38 @@ export default function LiveGamePage() {
   const [isFinishingGame, setIsFinishingGame] = useState(false);
 
   useEffect(() => {
-    if (typeof window === 'undefined') {
-        setIsLoading(false);
-        return;
-    }
-    
-    const serializedState = localStorage.getItem('liveGame');
-    if (serializedState) {
-        const payload = JSON.parse(serializedState);
-        setBaseGame(payload);
-        if (payload.status === 'FINISHED') {
-            dispatch({ type: 'REOPEN_GAME', id: `action_${Date.now()}`, timestamp: Date.now(), description: 'Game re-opened from history.', payload });
-        } else {
-            // Directly dispatch the payload for a new or in-progress game
-            dispatch({ type: 'GAME_START', id: `action_${Date.now()}`, timestamp: Date.now(), description: 'Game loaded from storage.', payload });
+    async function loadGame() {
+        if (typeof window === 'undefined') {
+            setIsLoading(false);
+            return;
         }
-    } else {
-        router.replace('/game/setup');
-        return;
-    }
+        
+        try {
+            const liveGame = await getLiveGame();
+            if (liveGame) {
+                setBaseGame(liveGame);
+                if (liveGame.status === 'FINISHED') {
+                    dispatch({ type: 'REOPEN_GAME', id: `action_${Date.now()}`, timestamp: Date.now(), description: 'Game re-opened from history.', payload: liveGame });
+                } else {
+                    dispatch({ type: 'GAME_START', id: `action_${Date.now()}`, timestamp: Date.now(), description: 'Game loaded from storage.', payload: liveGame });
+                }
+            } else {
+                router.replace('/game/setup');
+                return;
+            }
 
-    const storedSettings = localStorage.getItem('appSettings');
-    if (storedSettings) {
-        setAppSettings(JSON.parse(storedSettings));
-    } else {
-        setAppSettings(defaultAppSettings);
+            const storedSettings = localStorage.getItem('appSettings');
+            setAppSettings(storedSettings ? JSON.parse(storedSettings) : defaultAppSettings);
+        } catch (error) {
+            console.error("Failed to load live game", error);
+            toast({ title: "Error al cargar", description: "No se pudo cargar el partido en curso." });
+            router.replace('/game/setup');
+        } finally {
+            setIsLoading(false);
+        }
     }
-    setIsLoading(false);
-  }, [router]);
+    loadGame();
+  }, [router, toast]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout | undefined;
@@ -583,12 +573,6 @@ export default function LiveGamePage() {
     };
   }, [game.clockIsRunning, game.isTimeoutActive, game.currentQuarter, game.gameClock, game.homeTeam.stats.score, game.awayTeam.stats.score]);
 
-
-  useEffect(() => {
-    if (!isLoading && game.status !== 'FINISHED' && typeof window !== 'undefined') {
-      saveState(game);
-    }
-  }, [game, isLoading]);
 
   useEffect(() => {
     if(lastActionKey) {
@@ -627,107 +611,96 @@ export default function LiveGamePage() {
   };
   
   useEffect(() => {
-    if (game.status !== 'FINISHED' || typeof window === 'undefined' || isLoading) {
+    if (game.status !== 'FINISHED' || isLoading) {
         return;
     }
 
-    const finalGameData = produce(game, draft => {
-        draft.status = 'FINISHED';
-        draft.clockIsRunning = false;
-    });
-
-    if (finalGameData.tournamentId) {
-        const tournamentHistory = JSON.parse(localStorage.getItem('tournamentGameHistory') || '[]');
-        tournamentHistory.push(finalGameData);
-        localStorage.setItem('tournamentGameHistory', JSON.stringify(tournamentHistory));
-    } else {
-        const gameHistory = JSON.parse(localStorage.getItem('gameHistory') || '[]');
-        gameHistory.push(finalGameData);
-        localStorage.setItem('gameHistory', JSON.stringify(gameHistory));
-    }
-
-
-    if (finalGameData.tournamentId && finalGameData.matchId) {
-        const tournaments: any[] = JSON.parse(localStorage.getItem('tournaments') || '[]');
-        const tournamentIndex = tournaments.findIndex(t => t.id === finalGameData.tournamentId);
-
-        if (tournamentIndex !== -1) {
-            const updatedTournament = produce(tournaments[tournamentIndex], (draft: any) => {
-                const match = draft.matches.find((m: any) => m.id === finalGameData.matchId);
-                if (match) {
-                    const originalHomeTeam = draft.teams.find((t: any) => t.id === match.team1.id);
-                    const originalAwayTeam = draft.teams.find((t: any) => t.id === match.team2.id);
-
-                    // If the game was resumed, we first need to revert the old stats
-                    if (finalGameData.previousScores && originalHomeTeam && originalAwayTeam) {
-                        const { home: prevHome, away: prevAway } = finalGameData.previousScores;
-                        originalHomeTeam.pointsFor -= prevHome;
-                        originalHomeTeam.pointsAgainst -= prevAway;
-                        originalAwayTeam.pointsFor -= prevAway;
-                        originalAwayTeam.pointsAgainst -= prevHome;
-
-                        if (prevHome > prevAway) {
-                            originalHomeTeam.wins--;
-                            originalAwayTeam.losses--;
-                        } else if (prevAway > prevHome) {
-                            originalAwayTeam.wins--;
-                            originalHomeTeam.losses++;
-                        } else {
-                           // ties not handled
-                        }
-                    }
-                    
-                    const newHomeScore = finalGameData.homeTeam.stats.score;
-                    const newAwayScore = finalGameData.awayTeam.stats.score;
-
-                    // Now apply the new stats
-                    match.status = 'FINISHED';
-                    match.team1.score = newHomeScore;
-                    match.team2.score = newAwayScore;
-                    match.gameId = finalGameData.id;
-                    
-                    if (originalHomeTeam && originalAwayTeam) {
-                        originalHomeTeam.pointsFor += newHomeScore;
-                        originalHomeTeam.pointsAgainst += newAwayScore;
-                        originalAwayTeam.pointsFor += newAwayScore;
-                        originalAwayTeam.pointsAgainst += newHomeScore;
-
-                        if (newHomeScore > newAwayScore) {
-                            originalHomeTeam.wins++;
-                            originalAwayTeam.losses++;
-                        } else if (newAwayScore > newHomeScore) {
-                            originalHomeTeam.losses++;
-                            originalAwayTeam.wins++;
-                        } else {
-                          // Handle ties if they affect standings (e.g., points for a tie)
-                        }
-                    }
-                }
-            });
-            tournaments[tournamentIndex] = updatedTournament;
-            localStorage.setItem('tournaments', JSON.stringify(tournaments));
-            toast({
-                title: "Partido de Torneo Finalizado",
-                description: "Los resultados han sido guardados en el torneo y en el historial general.",
-            });
-        }
-    } else {
-        toast({
-            title: "Partido Guardado",
-            description: "El partido ha sido guardado en el historial general.",
+    const saveAndCleanup = async () => {
+        const finalGameData = produce(game, draft => {
+            draft.status = 'FINISHED';
+            draft.clockIsRunning = false;
         });
-    }
 
-    localStorage.removeItem('liveGame');
+        try {
+            await saveFinishedGame(finalGameData);
+
+            if (finalGameData.tournamentId && finalGameData.matchId) {
+                const allTournaments = await getTournaments();
+                const tournamentIndex = allTournaments.findIndex(t => t.id === finalGameData.tournamentId);
+
+                if (tournamentIndex !== -1) {
+                    const tournamentToUpdate = allTournaments[tournamentIndex];
+                    const updatedTournament = produce(tournamentToUpdate, (draft: any) => {
+                       const match = draft.matches.find((m: any) => m.id === finalGameData.matchId);
+                        if (match) {
+                            const homeTeam = draft.teams.find((t: any) => t.id === match.team1.id);
+                            const awayTeam = draft.teams.find((t: any) => t.id === match.team2.id);
+
+                            if (homeTeam && awayTeam) {
+                                if (finalGameData.previousScores) {
+                                    const { home: prevHome, away: prevAway } = finalGameData.previousScores;
+                                    homeTeam.pointsFor -= prevHome;
+                                    homeTeam.pointsAgainst -= prevAway;
+                                    awayTeam.pointsFor -= prevAway;
+                                    awayTeam.pointsAgainst -= prevHome;
+                                    if (prevHome > prevAway) { homeTeam.wins--; awayTeam.losses--; } 
+                                    else if (prevAway > prevHome) { awayTeam.wins--; homeTeam.losses--; }
+                                }
+                                
+                                const newHomeScore = finalGameData.homeTeam.stats.score;
+                                const newAwayScore = finalGameData.awayTeam.stats.score;
+
+                                match.status = 'FINISHED';
+                                match.team1.score = newHomeScore;
+                                match.team2.score = newAwayScore;
+                                match.gameId = finalGameData.id;
+                                
+                                homeTeam.pointsFor += newHomeScore;
+                                homeTeam.pointsAgainst += newAwayScore;
+                                awayTeam.pointsFor += newAwayScore;
+                                awayTeam.pointsAgainst += newHomeScore;
+
+                                if (newHomeScore > newAwayScore) { homeTeam.wins++; awayTeam.losses++; }
+                                else if (newAwayScore > newHomeScore) { homeTeam.losses++; awayTeam.wins++; }
+                            }
+                        }
+                    });
+                    await saveTournament(updatedTournament);
+                    toast({
+                        title: "Partido de Torneo Finalizado",
+                        description: "Los resultados han sido guardados en el torneo y en el historial general.",
+                    });
+                }
+            } else {
+                 toast({
+                    title: "Partido Guardado",
+                    description: "El partido ha sido guardado en el historial general.",
+                });
+            }
+            
+            await deleteLiveGame();
+
+            if (game.tournamentId) {
+                router.push(`/stats?tournamentId=${game.tournamentId}`);
+            } else {
+                router.push('/history');
+            }
+
+        } catch (error) {
+            console.error("Error finishing game: ", error);
+            toast({
+                title: "Error al guardar",
+                description: "No se pudo guardar el partido. Inténtalo de nuevo.",
+                variant: 'destructive',
+            });
+            setIsFinishingGame(false); // Allow user to try again
+        }
+    };
     
-    if (game.tournamentId) {
-        router.push(`/stats?tournamentId=${game.tournamentId}`);
-    } else {
-        router.push('/history');
-    }
+    saveAndCleanup();
       
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [game.status]);
+  }, [game.status, isLoading]);
 
   const createGameAction = (
       type: GameAction['type'],
@@ -1269,6 +1242,3 @@ export default function LiveGamePage() {
     </>
   );
 }
-
-
-    

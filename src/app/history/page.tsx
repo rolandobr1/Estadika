@@ -16,6 +16,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { LoadingModal } from '@/components/ui/loader';
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { getFinishedGames, deleteFinishedGames, importGames, saveLiveGame, getLiveGame } from '@/lib/db';
 
 const ScoreboardByQuarter = ({ game }: { game: Game }) => {
     const calculateQuarterScores = () => {
@@ -244,27 +245,28 @@ function HistoryContent() {
   const tournamentIdContext = searchParams.get('tournamentId');
 
   useEffect(() => {
-    if (typeof window === 'undefined') {
-        setIsLoading(false);
-        return;
-    }
-    
-    // If we are showing a specific game, we load from the correct history
-    if(gameIdToShow) {
-        const historyKey = tournamentIdContext ? 'tournamentGameHistory' : 'gameHistory';
-        const storedHistory = localStorage.getItem(historyKey);
-        if (storedHistory) {
-             setHistory(JSON.parse(storedHistory));
+    async function loadHistory() {
+        if (typeof window === 'undefined') {
+            setIsLoading(false);
+            return;
         }
-    } else { // Otherwise, we load the general history for the list view
-        const storedHistory = localStorage.getItem('gameHistory');
-        if (storedHistory) {
-            setHistory(JSON.parse(storedHistory).sort((a: Game, b: Game) => b.date - a.date));
+        
+        try {
+            const gamesFromDb = await getFinishedGames();
+            if (gameIdToShow) {
+                setHistory(gamesFromDb);
+            } else {
+                setHistory(gamesFromDb.sort((a: Game, b: Game) => b.date - a.date));
+            }
+        } catch (error) {
+            console.error("Error loading history", error);
+            toast({ title: "Error", description: "No se pudo cargar el historial de partidos."});
+        } finally {
+            setIsLoading(false);
         }
     }
-
-    setIsLoading(false);
-  }, [gameIdToShow, tournamentIdContext]);
+    loadHistory();
+  }, [gameIdToShow, toast]);
 
   const filteredHistory = useMemo(() => {
     if (!searchTerm) return history;
@@ -277,10 +279,9 @@ function HistoryContent() {
     );
   }, [history, searchTerm]);
 
-  const handleDeleteGames = (gameIds: string[]) => {
-    const updatedHistory = history.filter(game => !gameIds.includes(game.id));
-    setHistory(updatedHistory);
-    localStorage.setItem('gameHistory', JSON.stringify(updatedHistory));
+  const handleDeleteGames = async (gameIds: string[]) => {
+    await deleteFinishedGames(gameIds);
+    setHistory(prev => prev.filter(game => !gameIds.includes(game.id)));
     
     if(gameIds.length > 1) {
         toast({
@@ -340,7 +341,7 @@ function HistoryContent() {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
         try {
             const content = e.target?.result as string;
             const importedGame: Game = JSON.parse(content);
@@ -349,23 +350,21 @@ function HistoryContent() {
                 throw new Error("El archivo no tiene el formato de partido correcto.");
             }
             
-            if (history.some(g => g.id === importedGame.id)) {
-                toast({
-                    title: "Importación Fallida",
-                    description: "Un partido con el mismo ID ya existe en el historial.",
-                    variant: "destructive"
-                });
-                return;
-            }
-            
-            const updatedHistory = [importedGame, ...history].sort((a,b) => b.date - a.date);
-            setHistory(updatedHistory);
-            localStorage.setItem('gameHistory', JSON.stringify(updatedHistory));
+            const newItemsCount = await importGames([importedGame]);
 
-            toast({
-                title: "Partido Importado",
-                description: `El partido ${importedGame.homeTeam.name} vs ${importedGame.awayTeam.name} ha sido añadido al historial.`
-            });
+            if (newItemsCount > 0) {
+                 setHistory(prev => [importedGame, ...prev].sort((a, b) => b.date - a.date));
+                 toast({
+                    title: "Partido Importado",
+                    description: `El partido ${importedGame.homeTeam.name} vs ${importedGame.awayTeam.name} ha sido añadido al historial.`
+                });
+            } else {
+                 toast({
+                    title: "Importación Omitida",
+                    description: "Un partido con el mismo ID ya existe en el historial.",
+                    variant: "default"
+                });
+            }
 
         } catch (err) {
             toast({
@@ -382,14 +381,24 @@ function HistoryContent() {
     reader.readAsText(file);
   }
 
-  const handleResumeGame = (gameToResume: Game) => {
+  const handleResumeGame = async (gameToResume: Game) => {
+        // Prevent starting a new game if one is already in progress
+        const existingLiveGame = await getLiveGame();
+        if (existingLiveGame) {
+            toast({
+                title: "Juego en Curso",
+                description: "Ya hay un partido en progreso. Finalízalo antes de reanudar otro.",
+                variant: "destructive",
+            });
+            return;
+        }
+
       // 1. Remove the game from the history
-      const updatedHistory = history.filter(game => game.id !== gameToResume.id);
-      setHistory(updatedHistory);
-      localStorage.setItem('gameHistory', JSON.stringify(updatedHistory));
+      await deleteFinishedGames([gameToResume.id]);
+      setHistory(prev => prev.filter(game => game.id !== gameToResume.id));
 
       // 2. Set the game as the new liveGame
-      localStorage.setItem('liveGame', JSON.stringify(gameToResume));
+      await saveLiveGame(gameToResume);
       
       // 3. Navigate to live game page
       router.push('/game/live');
