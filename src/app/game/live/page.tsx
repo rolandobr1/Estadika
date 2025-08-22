@@ -606,10 +606,10 @@ export default function LiveGamePage() {
   };
   
   useEffect(() => {
-    if (game.status !== 'FINISHED' || isLoading || isFinishingGame) {
+    if (game.status !== 'FINISHED' || isLoading || !isFinishingGame) {
         return;
     }
-
+    
     const saveAndCleanup = async () => {
         try {
             await saveFinishedGame(game);
@@ -691,7 +691,7 @@ export default function LiveGamePage() {
     saveAndCleanup();
       
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [game.status, isLoading]);
+  }, [game.status, isFinishingGame]);
 
   const createGameAction = (
       type: GameAction['type'],
