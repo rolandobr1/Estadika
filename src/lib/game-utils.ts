@@ -44,7 +44,7 @@ export const createTeamInGame = (id: string, name: string, players: Player[], qu
 export function createInitialGame(): Game {
     const settings = defaultAppSettings.gameSettings;
 
-    return {
+    const game: Game = {
         id: `game_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
         date: Date.now(),
         homeTeam: createTeamInGame('homeTeam', 'Local', [], settings.quarters),
@@ -52,12 +52,29 @@ export function createInitialGame(): Game {
         gameLog: [],
         status: 'SETUP',
         currentQuarter: 1,
-        gameClock: settings.quarterLength,
+        gameClock: settings.quarterLength * 60,
         clockIsRunning: false,
         isTimeoutActive: false,
         timeoutClock: settings.timeoutLength,
         settings
     };
+
+    const getInitialTimeouts = () => {
+        const { timeoutSettings } = game.settings;
+        switch (timeoutSettings.mode) {
+            case 'per_quarter': return timeoutSettings.timeoutsPerQuarter;
+            case 'per_quarter_custom': return timeoutSettings.timeoutsPerQuarterValues[0] ?? 0;
+            case 'per_half': return timeoutSettings.timeoutsFirstHalf;
+            case 'total': return timeoutSettings.timeoutsTotal;
+            default: return 0;
+        }
+    };
+
+    const initialTimeouts = getInitialTimeouts();
+    game.homeTeam.stats.timeouts = initialTimeouts;
+    game.awayTeam.stats.timeouts = initialTimeouts;
+
+    return game;
 }
 
 

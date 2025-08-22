@@ -22,12 +22,8 @@ import { cn } from '@/lib/utils';
 import { LoadingModal } from '@/components/ui/loader';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { getPlayers, getTeams, saveLiveGame, getLiveGame } from '@/lib/db';
-
-// Helper function to create a clean slate for player stats
-const createInitialPlayerStats = (): PlayerStats => ({
-    '1PM': 0, '1PA': 0, '2PM': 0, '2PA': 0, '3PM': 0, '3PA': 0,
-    REB: 0, DREB: 0, OREB: 0, AST: 0, STL: 0, BLK: 0, TOV: 0, PF: 0, UF: 0, TF: 0, PTS: 0
-});
+import { createInitialGame, createTeamInGame } from '@/lib/game-utils';
+import { produce } from 'immer';
 
 const PlayerSelectionModal = ({
     isOpen,
@@ -290,62 +286,37 @@ export default function GameSetupPage() {
 
         setIsStartingGame(true);
 
-        const createTeamInGame = (id: string, name: string, players: Player[], quarters: number): TeamInGame => ({
-            id,
-            name,
-            players,
-            stats: { 
-                score: 0, 
-                timeouts: 0, 
-                foulsByQuarter: Array(quarters + 10).fill(0), // Allow for many overtimes
-                inBonus: false,
-            },
-            playerStats: players.reduce((acc, player) => {
-                acc[player.id] = createInitialPlayerStats();
-                return acc;
-            }, {} as Record<string, PlayerStats>),
-            // First 5 are on court, the rest on the bench
-            playersOnCourt: players.slice(0, 5).map(p => p.id),
+        const newGame = produce(createInitialGame(), draft => {
+             const finalSettings = {
+                ...gameSettings,
+                quarterLength: gameSettings.quarterLength * 60, // convert minutes to seconds
+                overtimeLength: gameSettings.overtimeLength * 60,
+            };
+
+            draft.settings = finalSettings;
+            draft.gameClock = finalSettings.quarterLength;
+            draft.timeoutClock = finalSettings.timeoutLength;
+            draft.status = 'IN_PROGRESS';
+
+            draft.homeTeam = createTeamInGame('homeTeam', homeTeamName, homePlayers, finalSettings.quarters);
+            draft.awayTeam = createTeamInGame('awayTeam', awayTeamName, awayPlayers, finalSettings.quarters);
+
+            const getInitialTimeouts = () => {
+                const { timeoutSettings } = finalSettings;
+                switch (timeoutSettings.mode) {
+                    case 'per_quarter': return timeoutSettings.timeoutsPerQuarter;
+                    case 'per_quarter_custom': return timeoutSettings.timeoutsPerQuarterValues[0] ?? 0;
+                    case 'per_half': return timeoutSettings.timeoutsFirstHalf;
+                    case 'total': return timeoutSettings.timeoutsTotal;
+                    default: return 0;
+                }
+            };
+
+            const initialTimeouts = getInitialTimeouts();
+            draft.homeTeam.stats.timeouts = initialTimeouts;
+            draft.awayTeam.stats.timeouts = initialTimeouts;
         });
 
-        // All good, create the game object
-        const finalSettings = {
-            ...gameSettings,
-            quarterLength: gameSettings.quarterLength * 60, // convert minutes to seconds
-            overtimeLength: gameSettings.overtimeLength * 60,
-        };
-        
-        const getInitialTimeouts = () => {
-            const { timeoutSettings } = finalSettings;
-            switch (timeoutSettings.mode) {
-                case 'per_quarter': return timeoutSettings.timeoutsPerQuarter;
-                case 'per_quarter_custom': return timeoutSettings.timeoutsPerQuarterValues[0] ?? 0;
-                case 'per_half': return timeoutSettings.timeoutsFirstHalf;
-                case 'total': return timeoutSettings.timeoutsTotal;
-                default: return 0;
-            }
-        };
-
-        const initialTimeouts = getInitialTimeouts();
-
-        const newGame: Game = {
-            id: `game_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-            date: Date.now(),
-            homeTeam: createTeamInGame('homeTeam', homeTeamName, homePlayers, finalSettings.quarters),
-            awayTeam: createTeamInGame('awayTeam', awayTeamName, awayPlayers, finalSettings.quarters),
-            gameLog: [],
-            status: 'IN_PROGRESS',
-            currentQuarter: 1,
-            gameClock: finalSettings.quarterLength,
-            clockIsRunning: false,
-            isTimeoutActive: false,
-            timeoutClock: finalSettings.timeoutLength,
-            settings: finalSettings
-        };
-
-        newGame.homeTeam.stats.timeouts = initialTimeouts;
-        newGame.awayTeam.stats.timeouts = initialTimeouts;
-        
         try {
             await saveLiveGame(newGame);
             toast({

@@ -85,7 +85,7 @@ export async function deleteTeams(teamIds: string[]): Promise<void> {
 
 export async function importTeams(teams: Team[]): Promise<number> {
     const batch = writeBatch(db);
-    const teamsCol = collection(db, TEAMS_COLlection);
+    const teamsCol = collection(db, TEAMS_COLLECTION);
 
     const teamRefs = teams.map(t => doc(teamsCol, t.id));
     const teamDocs = await Promise.all(teamRefs.map(ref => getDoc(ref)));
