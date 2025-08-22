@@ -8,56 +8,66 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { RiBasketballLine } from "react-icons/ri";
 import { cn } from '@/lib/utils';
 import { LoadingModal } from '@/components/ui/loader';
-import { doc, onSnapshot, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
-import { GAMES_COLLECTION, LIVE_GAME_COLLECTION } from '@/lib/db-constants';
 
 export default function SpectatorPage() {
     const params = useParams();
     const gameId = params.gameId as string;
     const [game, setGame] = useState<Game | null>(null);
-    const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [isClient, setIsClient] = useState(false);
 
     useEffect(() => {
-        if (!gameId) {
-            setError("No se ha proporcionado un ID de partido.");
+        setIsClient(true);
+    }, []);
+
+    useEffect(() => {
+        if (!isClient || !gameId) {
             return;
-        };
-        
-        setIsLoading(true);
+        }
 
-        const liveGameRef = doc(db, LIVE_GAME_COLLECTION, gameId);
-
-        const unsubscribe = onSnapshot(liveGameRef, (docSnap) => {
-            if (docSnap.exists()) {
-                setGame(docSnap.data() as Game);
-                setError(null);
-                setIsLoading(false);
-            } else {
-                // If not in live games, check finished games history
-                const finishedGameRef = doc(db, GAMES_COLLECTION, gameId);
-                getDoc(finishedGameRef).then(finishedDocSnap => {
-                    if (finishedDocSnap.exists()) {
-                        setGame(finishedDocSnap.data() as Game);
+        const updateGameFromStorage = () => {
+            const gameData = localStorage.getItem('liveGame');
+            if (gameData) {
+                try {
+                    const parsedGame = JSON.parse(gameData);
+                    if (parsedGame.id === gameId) {
+                        setGame(parsedGame);
                         setError(null);
                     } else {
+                        // If there's a live game but it's not the one we're watching, show an error.
+                        setError("Hay otro partido en curso. El marcador solicitado no está disponible en este momento.");
                         setGame(null);
-                        setError("No se pudo encontrar un partido con el ID proporcionado. El enlace puede haber expirado o ser incorrecto.");
                     }
-                    setIsLoading(false);
-                });
+                } catch(e) {
+                    console.error("Error parsing game data from localStorage", e);
+                    setError("No se pudieron cargar los datos del partido.");
+                    setGame(null);
+                }
+            } else {
+                 // If no live game is found in storage, we can assume it ended or link is old
+                setError("El partido no está en curso o el enlace ha expirado.");
+                setGame(null);
             }
-        }, (err) => {
-            console.error("Error listening to game updates:", err);
-            setError("Error al conectar con la base de datos.");
-            setIsLoading(false);
-        });
+        };
+
+        updateGameFromStorage();
+
+        const handleStorageChange = (event: StorageEvent) => {
+            if (event.key === 'liveGame') {
+                updateGameFromStorage();
+            }
+        };
+
+        window.addEventListener('storage', handleStorageChange);
 
         return () => {
-            unsubscribe();
+            window.removeEventListener('storage', handleStorageChange);
         };
-    }, [gameId]);
+    }, [isClient, gameId]);
+    
+    if (!isClient) {
+        return null; // Render nothing on the server to avoid hydration errors
+    }
 
     const getPeriodDisplay = () => {
         if (!game) return '';
@@ -76,19 +86,13 @@ export default function SpectatorPage() {
         const clock = game.isTimeoutActive ? game.timeoutClock : game.gameClock;
         return `${Math.floor(clock / 60).toString().padStart(2, '0')}:${(clock % 60).toString().padStart(2, '0')}`;
     }
-
-    if (!isLoading && !game && !error) return null;
     
-    if (isLoading) {
-        return <LoadingModal />;
-    }
-
     if (error || !game) {
         return (
             <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-4">
                  <Card className="w-full max-w-md text-center">
                     <CardHeader>
-                        <CardTitle>Partido no encontrado</CardTitle>
+                        <CardTitle>Marcador no Disponible</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <p>{error || "No se pudo encontrar el partido."}</p>

@@ -26,7 +26,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Input } from '@/components/ui/input';
 import { LoadingModal } from '@/components/ui/loader';
-import { getLiveGame, saveFinishedGame, deleteLiveGame, saveTournament, getTournamentById } from '@/lib/db';
+import { getLiveGame, saveFinishedGame, deleteLiveGame, saveTournament, getTournamentById, saveLiveGame } from '@/lib/db';
 
 // Reducer to manage game state by processing actions and updating the log
 function gameReducer(state: Game, action: GameAction): Game {
@@ -583,6 +583,18 @@ export default function LiveGamePage() {
     };
   }, [game.clockIsRunning, game.isTimeoutActive, game.currentQuarter, game.gameClock, game.homeTeam.stats.score, game.awayTeam.stats.score]);
 
+  // Persist to localStorage for spectator view
+  useEffect(() => {
+    if (typeof window !== 'undefined' && game.status === 'IN_PROGRESS') {
+      try {
+        const gameWithSerializableDate = { ...game, date: new Date(game.date).toISOString() };
+        localStorage.setItem('liveGame', JSON.stringify(gameWithSerializableDate));
+      } catch (error) {
+        console.error("Error saving game to localStorage:", error);
+      }
+    }
+  }, [game]);
+
 
   useEffect(() => {
     if(lastActionKey) {
@@ -652,6 +664,7 @@ export default function LiveGamePage() {
         }
         
         await deleteLiveGame(finalGame.id);
+        localStorage.removeItem('liveGame');
         
         if (finalGame.tournamentId) {
             router.push(`/stats?tournamentId=${finalGame.tournamentId}`);
@@ -1215,3 +1228,4 @@ export default function LiveGamePage() {
 
 
     
+
