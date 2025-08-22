@@ -78,7 +78,7 @@ export function Header() {
                          <Button 
                             asChild 
                             key={link.href} 
-                            variant={pathname.startsWith(link.href) && link.href !== '/' || pathname === '/' && link.href === '/' ? "default" : "ghost"} 
+                            variant={pathname === link.href ? "default" : "ghost"} 
                             className="justify-start text-base h-11"
                             onClick={() => setMobileMenuOpen(false)}
                           >
