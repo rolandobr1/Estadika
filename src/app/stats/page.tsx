@@ -21,6 +21,8 @@ import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { LoadingModal } from '@/components/ui/loader';
+import { getTournamentById, getFinishedGames, saveTournament, deleteLiveGame, saveLiveGame, getLiveGame } from '@/lib/db';
+import { createInitialPlayerStats, createInitialGame } from '@/lib/game-utils';
 
 const StandingsTable = ({ teams }: { teams: TournamentTeam[] }) => {
     const sortedTeams = useMemo(() => {
@@ -69,12 +71,6 @@ const StandingsTable = ({ teams }: { teams: TournamentTeam[] }) => {
         </Card>
     );
 };
-
-// Helper function to create a clean slate for player stats
-const createInitialPlayerStats = (): PlayerStats => ({
-    '1PM': 0, '1PA': 0, '2PM': 0, '2PA': 0, '3PM': 0, '3PA': 0,
-    REB: 0, DREB: 0, OREB: 0, AST: 0, STL: 0, BLK: 0, TOV: 0, PF: 0, UF: 0, TF: 0, PTS: 0
-});
 
 const AddMatchModal = ({
     isOpen,
@@ -168,22 +164,17 @@ const Schedule = ({ tournament, onUpdate }: { tournament: Tournament, onUpdate: 
     const [isStartingMatch, setIsStartingMatch] = useState(false);
 
     useEffect(() => {
-        if (typeof window === 'undefined') return;
-
-        const checkLiveGame = () => {
-            const liveGameData = localStorage.getItem('liveGame');
-            if (liveGameData) {
-                setLiveGameInfo(JSON.parse(liveGameData));
-            } else {
-                setLiveGameInfo(null);
-            }
+        const checkLiveGame = async () => {
+            if (typeof window === 'undefined') return;
+            const liveGameData = await getLiveGame();
+            setLiveGameInfo(liveGameData);
         };
 
         checkLiveGame();
         // Listen for storage changes to update UI in real-time if a game ends in another tab
-        window.addEventListener('storage', checkLiveGame);
+        const interval = setInterval(checkLiveGame, 2000); // Check every 2 seconds
         return () => {
-            window.removeEventListener('storage', checkLiveGame);
+            clearInterval(interval);
         };
     }, []);
 
@@ -213,10 +204,10 @@ const Schedule = ({ tournament, onUpdate }: { tournament: Tournament, onUpdate: 
         toast({ title: "Partido Añadido", description: "El nuevo partido ha sido añadido al calendario." });
     };
 
-    const handleStartMatch = (match: TournamentMatch) => {
+    const handleStartMatch = async (match: TournamentMatch) => {
         if (typeof window === 'undefined') return;
-
-        if (liveGameInfo) {
+        const currentLiveGame = await getLiveGame();
+        if (currentLiveGame) {
             setShowGameInProgressDialog(true);
             return;
         }
@@ -238,15 +229,19 @@ const Schedule = ({ tournament, onUpdate }: { tournament: Tournament, onUpdate: 
         const gameSettings: GameSettings = {
             ...(appSettings.gameSettings || {}),
             ...tournament.gameSettings,
-            quarterLength: (tournament.gameSettings.quarterLength || appSettings.gameSettings.quarterLength || 10) * 60,
-            overtimeLength: (tournament.gameSettings.overtimeLength || appSettings.gameSettings.overtimeLength || 5) * 60,
+            quarterLength: (tournament.gameSettings.quarterLength || appSettings.gameSettings.quarterLength || 10), // Keep in minutes for UI setup
+            overtimeLength: (tournament.gameSettings.overtimeLength || appSettings.gameSettings.overtimeLength || 5), // Keep in minutes
             name: `${homeTournamentTeam.name} vs ${awayTournamentTeam.name} (${tournament.name})`,
         };
+        
+        // Let's create the game object with seconds for the game logic
+        const newGame: Game = createInitialGame();
         
         const getInitialTimeouts = () => {
             const { timeoutSettings } = gameSettings;
             switch (timeoutSettings.mode) {
                 case 'per_quarter': return timeoutSettings.timeoutsPerQuarter;
+                 case 'per_quarter_custom': return timeoutSettings.timeoutsPerQuarterValues[0] ?? 0;
                 case 'per_half': return timeoutSettings.timeoutsFirstHalf;
                 case 'total': return timeoutSettings.timeoutsTotal;
                 default: return 2;
@@ -269,26 +264,22 @@ const Schedule = ({ tournament, onUpdate }: { tournament: Tournament, onUpdate: 
             }, {} as Record<string, PlayerStats>),
             playersOnCourt: tournTeam.players.slice(0, 5).map(p => p.id),
         });
-
-        const gameId = `game_${match.id}`;
-        const newGame: Game = {
-            id: gameId,
-            date: Date.now(),
-            homeTeam: createTeamInGame(homeTournamentTeam, 'homeTeam'),
-            awayTeam: createTeamInGame(awayTournamentTeam, 'awayTeam'),
-            gameLog: [],
-            status: 'IN_PROGRESS',
-            currentQuarter: 1,
-            gameClock: gameSettings.quarterLength,
-            clockIsRunning: false,
-            isTimeoutActive: false,
-            timeoutClock: gameSettings.timeoutLength,
-            settings: gameSettings,
-            tournamentId: tournament.id,
-            matchId: match.id,
-        };
         
-        localStorage.setItem('liveGame', JSON.stringify(newGame));
+        const finalGameSettings = {
+             ...gameSettings,
+            quarterLength: gameSettings.quarterLength * 60,
+            overtimeLength: gameSettings.overtimeLength * 60,
+        };
+
+        newGame.id = `game_${match.id}`;
+        newGame.settings = finalGameSettings;
+        newGame.gameClock = finalGameSettings.quarterLength;
+        newGame.homeTeam = createTeamInGame(homeTournamentTeam, 'homeTeam');
+        newGame.awayTeam = createTeamInGame(awayTournamentTeam, 'awayTeam');
+        newGame.tournamentId = tournament.id;
+        newGame.matchId = match.id;
+        
+        await saveLiveGame(newGame);
         
         toast({ title: "¡Partido Iniciado!", description: "Redirigiendo a la pantalla de juego." });
         router.push('/game/live');
@@ -601,7 +592,7 @@ const StatsTab = ({ games, teams }: { games: Game[], teams: TournamentTeam[] }) 
         
         games.forEach(game => {
             const processTeam = (team: TeamInGame, teamId: 'homeTeam' | 'awayTeam') => {
-                const tournamentTeamId = game[teamId === 'homeTeam' ? 'homeTeam' : 'awayTeam'].id;
+                const tournamentTeamData = teamId === 'homeTeam' ? game.homeTeam : game.awayTeam;
                 
                 team.players.forEach((player: Player) => {
                     if (!playerStatsMap.has(player.id)) return;
@@ -829,79 +820,76 @@ function TournamentDetailsContent() {
     const [isResumingGame, setIsResumingGame] = useState(false);
 
     useEffect(() => {
-        if (typeof window === 'undefined') {
-          setIsLoading(false);
-          return;
-        }
-
-        const tournamentId = searchParams.get('tournamentId');
-        if (!tournamentId) {
-            router.push('/tournaments');
-            return;
-        }
-
-        const storedTournaments = localStorage.getItem('tournaments');
-        const storedHistory = localStorage.getItem('tournamentGameHistory');
-        
-        let foundTournament = null;
-        if (storedTournaments) {
-            const tournaments: Tournament[] = JSON.parse(storedTournaments);
-            foundTournament = tournaments.find(t => t.id === tournamentId);
-        }
-
-        if (foundTournament) {
-            setTournament(foundTournament);
-            if(storedHistory) {
-                const history: Game[] = JSON.parse(storedHistory);
-                const games = history.filter(g => g.tournamentId === tournamentId).sort((a,b) => b.date - a.date);
-                setTournamentGames(games);
+        const loadData = async () => {
+            if (typeof window === 'undefined') {
+                setIsLoading(false);
+                return;
             }
-        } else {
-            router.push('/tournaments');
-        }
-        setIsLoading(false);
-    }, [searchParams, router]);
 
-     const updateTournament = (updatedTournament: Tournament) => {
+            const tournamentId = searchParams.get('tournamentId');
+            if (!tournamentId) {
+                router.push('/tournaments');
+                return;
+            }
+            
+            try {
+                const foundTournament = await getTournamentById(tournamentId);
+                
+                if (foundTournament) {
+                    setTournament(foundTournament);
+                    const allGames = await getFinishedGames();
+                    const gamesForTournament = allGames.filter(g => g.tournamentId === tournamentId).sort((a,b) => b.date - a.date);
+                    setTournamentGames(gamesForTournament);
+                } else {
+                    toast({ variant: 'destructive', title: 'Torneo no encontrado' });
+                    router.push('/tournaments');
+                }
+            } catch (error) {
+                console.error(error);
+                toast({ variant: 'destructive', title: 'Error al cargar datos del torneo' });
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        loadData();
+    }, [searchParams, router, toast]);
+
+     const updateTournament = async (updatedTournament: Tournament) => {
         setTournament(updatedTournament);
-
-        const storedTournaments = localStorage.getItem('tournaments');
-        if (storedTournaments) {
-            const tournaments: Tournament[] = JSON.parse(storedTournaments);
-            const index = tournaments.findIndex(t => t.id === updatedTournament.id);
-            if (index !== -1) {
-                tournaments[index] = updatedTournament;
-                localStorage.setItem('tournaments', JSON.stringify(tournaments));
-            }
-        }
+        await saveTournament(updatedTournament);
     };
     
-    const deleteTournament = () => {
+    const deleteTournament = async () => {
+        if (!tournament) return;
+        
+        // Note: This does not delete associated games from history, they just lose their link.
+        // A more robust solution might involve a batch delete of games.
         const storedTournamentsRaw = localStorage.getItem('tournaments');
-        if (storedTournamentsRaw && tournament) {
+        if (storedTournamentsRaw) {
             const allTournaments: Tournament[] = JSON.parse(storedTournamentsRaw);
             const updatedTournaments = allTournaments.filter(t => t.id !== tournament.id);
             localStorage.setItem('tournaments', JSON.stringify(updatedTournaments));
-            toast({
-                title: "Torneo Eliminado",
-                description: `El torneo "${tournament.name}" ha sido eliminado.`,
-                variant: 'destructive'
-            });
-            router.push('/tournaments');
         }
+
+        toast({
+            title: "Torneo Eliminado",
+            description: `El torneo "${tournament.name}" ha sido eliminado.`,
+            variant: 'destructive'
+        });
+        router.push('/tournaments');
     };
 
-    const handleResumeTournamentGame = (gameToResume: Game) => {
+    const handleResumeTournamentGame = async (gameToResume: Game) => {
         setIsResumingGame(true);
-        const historyKey = 'tournamentGameHistory';
-        const storedHistory = localStorage.getItem(historyKey);
-        if (storedHistory) {
-            const updatedHistory = JSON.parse(storedHistory).filter((g: Game) => g.id !== gameToResume.id);
-            setTournamentGames(updatedHistory.filter((g: Game) => g.tournamentId === tournament?.id)); // Update local state for UI
-            localStorage.setItem(historyKey, JSON.stringify(updatedHistory));
-        }
+        // Remove game from general history
+        await deleteFinishedGames([gameToResume.id]);
+        
+        // Update local state to reflect removal
+        setTournamentGames(prev => prev.filter(g => g.id !== gameToResume.id));
 
-        localStorage.setItem('liveGame', JSON.stringify(gameToResume));
+        // Set as live game
+        await saveLiveGame(gameToResume);
         
         router.push('/game/live');
 
