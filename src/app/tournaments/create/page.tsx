@@ -20,6 +20,7 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { LoadingModal } from '@/components/ui/loader';
+import { getTeams, getPlayers } from '@/lib/roster';
 
 type ScheduleGenerationOption = 'random' | 'manual';
 
@@ -45,29 +46,38 @@ export default function CreateTournamentPage() {
 
 
   useEffect(() => {
-    if (typeof window === 'undefined') {
-        setIsLoading(false);
-        return;
-    }
-    const storedTeams = localStorage.getItem('teams');
-    const storedPlayers = localStorage.getItem('players');
-    const storedSettings = localStorage.getItem('appSettings');
-
-    if (storedTeams) setAllTeams(JSON.parse(storedTeams));
-    if (storedPlayers) setAllPlayers(JSON.parse(storedPlayers));
-    if (storedSettings) {
+    async function loadData() {
+        if (typeof window === 'undefined') {
+            setIsLoading(false);
+            return;
+        }
+        
         try {
-            const parsedSettings: AppSettings = JSON.parse(storedSettings);
-            setGameSettings(prev => ({ 
-                ...prev, 
-                ...(parsedSettings.gameSettings || {}) 
-            }));
-        } catch (e) {
-            console.error("Could not parse app settings", e);
+            const [teamsFromDb, playersFromDb] = await Promise.all([getTeams(), getPlayers()]);
+            setAllTeams(teamsFromDb);
+            setAllPlayers(playersFromDb);
+
+            const storedSettings = localStorage.getItem('appSettings');
+            if (storedSettings) {
+                const parsedSettings: AppSettings = JSON.parse(storedSettings);
+                setGameSettings(prev => ({ 
+                    ...prev, 
+                    ...(parsedSettings.gameSettings || {}) 
+                }));
+            }
+        } catch (error) {
+            console.error("Failed to load roster data:", error);
+            toast({
+                title: 'Error al Cargar Datos',
+                description: 'No se pudo cargar la plantilla. Inténtalo de nuevo.',
+                variant: 'destructive',
+            });
+        } finally {
+            setIsLoading(false);
         }
     }
-    setIsLoading(false);
-  }, []);
+    loadData();
+  }, [toast]);
 
   const handleToggleTeam = (teamId: string) => {
     setSelectedTeamIds(prev => {
