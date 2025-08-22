@@ -382,7 +382,6 @@ function HistoryContent() {
   }
 
   const handleResumeGame = async (gameToResume: Game) => {
-        // Prevent starting a new game if one is already in progress
         const existingLiveGame = await getLiveGame();
         if (existingLiveGame) {
             toast({
@@ -393,14 +392,12 @@ function HistoryContent() {
             return;
         }
 
-      // 1. Remove the game from the history
+      // Important: Remove the game from the history *before* setting it as live
       await deleteFinishedGames([gameToResume.id]);
       setHistory(prev => prev.filter(game => game.id !== gameToResume.id));
 
-      // 2. Set the game as the new liveGame
       await saveLiveGame(gameToResume);
       
-      // 3. Navigate to live game page
       router.push('/game/live');
 
       toast({

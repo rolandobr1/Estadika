@@ -21,7 +21,7 @@ import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { LoadingModal } from '@/components/ui/loader';
-import { getTournamentById, getFinishedGames, saveTournament, deleteLiveGame, saveLiveGame, getLiveGame } from '@/lib/db';
+import { getTournamentById, getFinishedGames, saveTournament, deleteLiveGame, saveLiveGame, getLiveGame, deleteFinishedGames } from '@/lib/db';
 import { createInitialPlayerStats, createInitialGame } from '@/lib/game-utils';
 
 const StandingsTable = ({ teams }: { teams: TournamentTeam[] }) => {

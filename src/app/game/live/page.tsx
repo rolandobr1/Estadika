@@ -519,9 +519,9 @@ export default function LiveGamePage() {
             const liveGame = await getLiveGame();
             if (liveGame) {
                 setBaseGame(liveGame);
-                if (liveGame.status === 'FINISHED') {
+                if (liveGame.status === 'FINISHED') { // Game was resumed
                     dispatch({ type: 'REOPEN_GAME', id: `action_${Date.now()}`, timestamp: Date.now(), description: 'Game re-opened from history.', payload: liveGame });
-                } else {
+                } else { // New game
                     dispatch({ type: 'GAME_START', id: `action_${Date.now()}`, timestamp: Date.now(), description: 'Game loaded from storage.', payload: liveGame });
                 }
             } else {
