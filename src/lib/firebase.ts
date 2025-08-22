@@ -1,6 +1,6 @@
 
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, initializeFirestore, persistentLocalCache } from 'firebase/firestore';
+import { getFirestore, initializeFirestore, persistentLocalCache, memoryLocalCache } from 'firebase/firestore';
 
 const firebaseConfig = {
   "projectId": "estadika-20",
@@ -16,8 +16,7 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 // Initialize Firestore with offline persistence
 const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({})
+  localCache: persistentLocalCache({ tabManager: 'PRIMARY' })
 });
-
 
 export { app, db };

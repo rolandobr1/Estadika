@@ -1008,4 +1008,3 @@ export default function TournamentDetailsPage() {
         </Suspense>
     )
 }
-

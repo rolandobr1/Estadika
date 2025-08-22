@@ -4,6 +4,8 @@ import { db } from '@/lib/firebase';
 import { collection, getDocs, doc, setDoc, deleteDoc, writeBatch, getDoc, query, orderBy, Timestamp } from 'firebase/firestore';
 import type { Player, Team, Tournament, Game } from '@/lib/types';
 import { produce } from 'immer';
+import { PLAYERS_COLLECTION, TEAMS_COLLECTION, TOURNAMENTS_COLLECTION, GAMES_COLLECTION, LIVE_GAME_COLLECTION } from '@/lib/db-constants';
+
 
 // --- Data Conversion Utilities ---
 
@@ -58,12 +60,7 @@ function toFirestore(data: any): any {
 }
 
 
-// Collection Names
-const PLAYERS_COLLECTION = 'players';
-const TEAMS_COLLECTION = 'teams';
-const TOURNAMENTS_COLLECTION = 'tournaments';
-const GAMES_COLLECTION = 'games'; // For finished games history
-const LIVE_GAME_COLLECTION = 'live-game'; // For the single live game
+
 
 // --- Player Functions ---
 
@@ -189,18 +186,20 @@ export async function deleteTournament(tournamentId: string): Promise<void> {
 // --- Game Functions ---
 
 export async function saveLiveGame(game: Game): Promise<void> {
-    const liveGameRef = doc(db, LIVE_GAME_COLLECTION, 'current');
+    const liveGameRef = doc(db, LIVE_GAME_COLLECTION, game.id);
     await setDoc(liveGameRef, toFirestore(game));
 }
 
 export async function getLiveGame(): Promise<Game | null> {
-    const liveGameRef = doc(db, LIVE_GAME_COLLECTION, 'current');
-    const docSnap = await getDoc(liveGameRef);
-    return docSnap.exists() ? (fromFirestore(docSnap.data()) as Game) : null;
+    const liveGameCol = collection(db, LIVE_GAME_COLLECTION);
+    const snapshot = await getDocs(query(liveGameCol));
+    if (snapshot.empty) return null;
+    // There should only ever be one live game
+    return fromFirestore(snapshot.docs[0].data()) as Game;
 }
 
-export async function deleteLiveGame(): Promise<void> {
-    const liveGameRef = doc(db, LIVE_GAME_COLLECTION, 'current');
+export async function deleteLiveGame(gameId: string): Promise<void> {
+    const liveGameRef = doc(db, LIVE_GAME_COLLECTION, gameId);
     await deleteDoc(liveGameRef);
 }
 

@@ -545,7 +545,7 @@ export default function GameSetupPage() {
                                     <div className={cn("transition-opacity", gameSettings.timeoutSettings.mode !== 'total' && 'opacity-50')}>
                                         <GameSettingInput label="Tiempos Totales" value={gameSettings.timeoutSettings.timeoutsTotal} onChange={val => handleTimeoutSettingChange('timeoutsTotal', val)} disabled={gameSettings.timeoutSettings.mode !== 'total'} />
                                     </div>
-                                    <GameSettingInput label="Tiempos (Prórroga)" value={gameSettings.timeoutsOvertime} onChange={val => handleSettingChange('timeoutsOvertime', val)} />
+                                    <GameSettingInput label="Tiempos (Prórroga)" value={gameSettings.timeoutsOvertime} onChange={val => handleGameSettingChange('timeoutsOvertime', val)} />
                                 </div>
                                 <div className={cn("pt-4 space-y-4", gameSettings.timeoutSettings.mode !== 'per_quarter_custom' && 'hidden')}>
                                     <Label className="font-semibold">Tiempos Muertos por Cuarto</Label>

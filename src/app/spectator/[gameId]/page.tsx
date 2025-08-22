@@ -8,6 +8,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { RiBasketballLine } from "react-icons/ri";
 import { cn } from '@/lib/utils';
 import { LoadingModal } from '@/components/ui/loader';
+import { doc, onSnapshot, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/db';
+import { GAMES_COLLECTION, LIVE_GAME_COLLECTION } from '@/lib/db-constants';
 
 export default function SpectatorPage() {
     const params = useParams();
@@ -23,56 +26,35 @@ export default function SpectatorPage() {
             return;
         };
 
-        const getGameFromStorage = (): Game | null => {
-            const keysToCheck = [
-                'liveGame',
-                `liveGame_${gameId}`,
-                'gameHistory',
-                'tournamentGameHistory'
-            ];
+        const liveGameRef = doc(db, LIVE_GAME_COLLECTION, gameId);
 
-            for (const key of keysToCheck) {
-                const rawData = localStorage.getItem(key);
-                if (rawData) {
-                    try {
-                        const data = JSON.parse(rawData);
-                        if (Array.isArray(data)) { // History arrays
-                             const foundGame = (data as Game[]).find(g => g.id === gameId);
-                             if (foundGame) return foundGame;
-                        } else { // Single game object
-                             if (data.id === gameId) return data;
-                        }
-                    } catch (e) {
-                         console.error(`Error parsing data from ${key}`, e);
-                    }
-                }
-            }
-            return null; // No game found anywhere
-        };
-
-        const loadGame = () => {
-            const gameData = getGameFromStorage();
-            if (gameData) {
-                setGame(gameData);
+        const unsubscribe = onSnapshot(liveGameRef, (docSnap) => {
+            if (docSnap.exists()) {
+                setGame(docSnap.data() as Game);
                 setError(null);
+                setIsLoading(false);
             } else {
-                setGame(null);
-                setError("No se pudo encontrar un partido con el ID proporcionado. El enlace puede haber expirado o ser incorrecto.");
+                // If not in live games, check finished games history
+                const finishedGameRef = doc(db, GAMES_COLLECTION, gameId);
+                getDoc(finishedGameRef).then(finishedDocSnap => {
+                    if (finishedDocSnap.exists()) {
+                        setGame(finishedDocSnap.data() as Game);
+                        setError(null);
+                    } else {
+                        setGame(null);
+                        setError("No se pudo encontrar un partido con el ID proporcionado. El enlace puede haber expirado o ser incorrecto.");
+                    }
+                    setIsLoading(false);
+                });
             }
+        }, (err) => {
+            console.error("Error listening to game updates:", err);
+            setError("Error al conectar con la base de datos.");
             setIsLoading(false);
-        };
-
-        loadGame();
-
-        // Listen for storage changes to update in real-time
-        const handleStorageChange = (event: StorageEvent) => {
-            loadGame();
-        };
-
-        window.addEventListener('storage', handleStorageChange);
+        });
 
         return () => {
-            window.removeEventListener('storage', handleStorageChange);
+            unsubscribe();
         };
     }, [gameId]);
 

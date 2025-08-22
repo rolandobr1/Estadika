@@ -89,8 +89,8 @@ function gameReducer(state: Game, action: GameAction): Game {
                 }
             });
             
-        case 'GAME_END':
-             return produce(state, draft => {
+        case 'GAME_END': {
+             const finalState = produce(state, draft => {
                 const endAction: GameAction = {
                     id: `action_${Date.now()}`,
                     type: 'GAME_END',
@@ -107,6 +107,8 @@ function gameReducer(state: Game, action: GameAction): Game {
                 draft.status = 'FINISHED';
                 draft.clockIsRunning = false;
              });
+             return finalState;
+        }
 
         case 'REOPEN_GAME': {
             const gameToReopen: Game = action.payload as any;
@@ -134,7 +136,7 @@ function gameReducer(state: Game, action: GameAction): Game {
                 Object.assign(draft, baseGame);
                 const newLog = state.gameLog.slice(0, -1);
                 draft.gameLog = newLog;
-                const recalculatedState = recalculateGameStateFromLog(draft, newLog);
+                const recalculatedState = recalculateGameStateFromLog(draft as Game, newLog);
                 Object.assign(draft, recalculatedState);
              });
         }
@@ -649,7 +651,7 @@ export default function LiveGamePage() {
             });
         }
         
-        await deleteLiveGame();
+        await deleteLiveGame(finalGame.id);
         
         if (finalGame.tournamentId) {
             router.push(`/stats?tournamentId=${finalGame.tournamentId}`);
