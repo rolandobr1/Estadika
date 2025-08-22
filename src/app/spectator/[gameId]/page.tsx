@@ -9,7 +9,7 @@ import { RiBasketballLine } from "react-icons/ri";
 import { cn } from '@/lib/utils';
 import { LoadingModal } from '@/components/ui/loader';
 import { doc, onSnapshot, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/db';
+import { db } from '@/lib/firebase';
 import { GAMES_COLLECTION, LIVE_GAME_COLLECTION } from '@/lib/db-constants';
 
 export default function SpectatorPage() {

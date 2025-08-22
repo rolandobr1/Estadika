@@ -1,6 +1,6 @@
 
 
-import { db } from '@/lib/firebase';
+import { app, db } from '@/lib/firebase';
 import { collection, getDocs, doc, setDoc, deleteDoc, writeBatch, getDoc, query, orderBy, Timestamp } from 'firebase/firestore';
 import type { Player, Team, Tournament, Game } from '@/lib/types';
 import { produce } from 'immer';
