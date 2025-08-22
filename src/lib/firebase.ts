@@ -1,12 +1,13 @@
+
 import { initializeApp, getApps, getApp } from 'firebase/app';
 
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  "projectId": "estadika-20",
+  "appId": "1:799142083005:web:09b4474717230841227ad4",
+  "storageBucket": "estadika-20.firebasestorage.app",
+  "apiKey": "AIzaSyDUGVmjK-j7-LoSvyLCaYcRCK56uD6HrbA",
+  "authDomain": "estadika-20.firebaseapp.com",
+  "messagingSenderId": "799142083005"
 };
 
 // Initialize Firebase
