@@ -26,7 +26,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Input } from '@/components/ui/input';
 import { LoadingModal } from '@/components/ui/loader';
-import { getLiveGame, saveFinishedGame, deleteLiveGame, getTournaments, saveTournament } from '@/lib/db';
+import { getLiveGame, saveFinishedGame, deleteLiveGame, saveTournament, getTournamentById } from '@/lib/db';
 
 // Reducer to manage game state by processing actions and updating the log
 function gameReducer(state: Game, action: GameAction): Game {
@@ -93,7 +93,6 @@ function gameReducer(state: Game, action: GameAction): Game {
              return produce(state, draft => {
                 draft.status = 'FINISHED';
                 draft.clockIsRunning = false;
-                draft.previousScores = action.payload.previousScores;
                 draft.gameLog.push(action);
              });
 
@@ -104,9 +103,6 @@ function gameReducer(state: Game, action: GameAction): Game {
             let nextState = produce(gameToReopen, draft => {
                 draft.status = 'IN_PROGRESS';
                 draft.clockIsRunning = false;
-                
-                // If we are re-opening, the "current" score becomes the "previous" score for the next time we save.
-                draft.previousScores = { home: draft.homeTeam.stats.score, away: draft.awayTeam.stats.score };
 
                 // Remove the GAME_END action from the log
                 const gameEndIndex = draft.gameLog.findIndex(a => a.type === 'GAME_END');
@@ -604,39 +600,31 @@ export default function LiveGamePage() {
             gameClock: game.gameClock,
             homeScore: game.homeTeam.stats.score,
             awayScore: game.awayTeam.stats.score,
-            previousScores: game.previousScores, // Pass previous scores if they exist
         },
     };
     dispatch(action);
   };
   
   useEffect(() => {
-    if (game.status !== 'FINISHED' || isLoading) {
+    if (game.status !== 'FINISHED' || isLoading || isFinishingGame) {
         return;
     }
 
     const saveAndCleanup = async () => {
-        const finalGameData = produce(game, draft => {
-            draft.status = 'FINISHED';
-            draft.clockIsRunning = false;
-        });
-
         try {
-            await saveFinishedGame(finalGameData);
+            await saveFinishedGame(game);
 
-            if (finalGameData.tournamentId && finalGameData.matchId) {
-                const allTournaments = await getTournaments();
-                const tournamentIndex = allTournaments.findIndex(t => t.id === finalGameData.tournamentId);
+            if (game.tournamentId && game.matchId) {
+                const tournamentToUpdate = await getTournamentById(game.tournamentId);
 
-                if (tournamentIndex !== -1) {
-                    const tournamentToUpdate = allTournaments[tournamentIndex];
+                if (tournamentToUpdate) {
                     const updatedTournament = produce(tournamentToUpdate, (draft: Tournament) => {
-                       const match = draft.matches.find(m => m.id === finalGameData.matchId);
+                       const match = draft.matches.find(m => m.id === game.matchId);
                         if (match) {
                             match.status = 'FINISHED';
-                            match.team1.score = finalGameData.homeTeam.stats.score;
-                            match.team2.score = finalGameData.awayTeam.stats.score;
-                            match.gameId = finalGameData.id;
+                            match.team1.score = game.homeTeam.stats.score;
+                            match.team2.score = game.awayTeam.stats.score;
+                            match.gameId = game.id;
                         }
                         
                         // Recalculate all team stats for the tournament to ensure consistency
@@ -666,7 +654,9 @@ export default function LiveGamePage() {
                             });
                         });
                     });
+
                     await saveTournament(updatedTournament);
+
                     toast({
                         title: "Partido de Torneo Finalizado",
                         description: "Los resultados han sido guardados en el torneo y en el historial general.",

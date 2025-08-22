@@ -114,6 +114,12 @@ export async function getTournaments(): Promise<Tournament[]> {
     return tournamentList;
 }
 
+export async function getTournamentById(id: string): Promise<Tournament | null> {
+    const tournamentRef = doc(db, TOURNAMENTS_COLLECTION, id);
+    const docSnap = await getDoc(tournamentRef);
+    return docSnap.exists() ? (docSnap.data() as Tournament) : null;
+}
+
 export async function saveTournament(tournament: Tournament): Promise<void> {
     const tournamentRef = doc(db, TOURNAMENTS_COLLECTION, tournament.id);
     await setDoc(tournamentRef, tournament, { merge: true });
