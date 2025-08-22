@@ -126,6 +126,12 @@ export async function saveTournament(tournament: Tournament): Promise<void> {
     await setDoc(tournamentRef, tournament, { merge: true });
 }
 
+export async function deleteTournament(tournamentId: string): Promise<void> {
+    const tournamentRef = doc(db, TOURNAMENTS_COLLECTION, tournamentId);
+    await deleteDoc(tournamentRef);
+}
+
+
 // --- Game Functions ---
 
 /**
@@ -206,3 +212,4 @@ export async function importGames(games: Game[]): Promise<number> {
     await batch.commit();
     return newItemsCount;
 }
+

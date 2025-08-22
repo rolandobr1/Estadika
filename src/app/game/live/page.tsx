@@ -602,6 +602,7 @@ export default function LiveGamePage() {
 
     setIsFinishingGame(true);
 
+    // Create a final, clean copy of the game to be saved to history
     const finalGame = produce(game, draft => {
         draft.status = 'FINISHED';
         draft.clockIsRunning = false;
@@ -621,8 +622,10 @@ export default function LiveGamePage() {
     });
     
     try {
+        // Step 1: Save the completed game to the general history
         await saveFinishedGame(finalGame);
 
+        // Step 2: If it's a tournament match, update the tournament data
         if (finalGame.tournamentId && finalGame.matchId) {
             const tournamentToUpdate = await getTournamentById(finalGame.tournamentId);
 
@@ -635,36 +638,6 @@ export default function LiveGamePage() {
                         match.team2.score = finalGame.awayTeam.stats.score;
                         match.gameId = finalGame.id;
                     }
-                    
-                    draft.teams.forEach(team => {
-                        team.wins = 0;
-                        team.losses = 0;
-                        team.pointsFor = 0;
-                        team.pointsAgainst = 0;
-
-                        draft.matches.forEach(m => {
-                            if (m.status !== 'FINISHED' || (m.team1.id !== team.id && m.team2.id !== team.id)) {
-                                return;
-                            }
-                            
-                            const isTeam1 = m.team1.id === team.id;
-                            const teamScore = isTeam1 ? (m.team1.score ?? 0) : (m.team2.score ?? 0);
-                            const opponentScore = isTeam1 ? (m.team2.score ?? 0) : (m.team1.score ?? 0);
-
-                            if (typeof teamScore !== 'number' || typeof opponentScore !== 'number') {
-                                return;
-                            }
-
-                            team.pointsFor += teamScore;
-                            team.pointsAgainst += opponentScore;
-
-                            if (teamScore > opponentScore) {
-                                team.wins++;
-                            } else if (opponentScore > teamScore) {
-                                team.losses++;
-                            }
-                        });
-                    });
                 });
                 await saveTournament(updatedTournament);
                 toast({
@@ -679,8 +652,10 @@ export default function LiveGamePage() {
             });
         }
         
+        // Step 3: Clean up the live game document
         await deleteLiveGame();
         
+        // Step 4: Redirect the user
         if (finalGame.tournamentId) {
             router.push(`/stats?tournamentId=${finalGame.tournamentId}`);
         } else {
@@ -1108,7 +1083,7 @@ export default function LiveGamePage() {
                 <Button variant="ghost" size="sm" onClick={() => handleChangeQuarter('next')}>P. Sig. <ChevronRight className="ml-1 h-4 w-4"/></Button>
             </div>
             <div className="pt-2 sm:pt-4 border-t w-full max-w-sm text-center">
-                 <Button variant="outline" size="sm" onClick={() => setIsClockModalOpen(true)} disabled={game.clockIsRunning}>
+                 <Button variant="outline" size="sm" onClick={()={() => setIsClockModalOpen(true)} disabled={game.clockIsRunning}>
                     <Settings className="mr-2 h-4 w-4" />
                     Ajustes del Reloj
                 </Button>
@@ -1240,3 +1215,4 @@ export default function LiveGamePage() {
 }
 
     
+

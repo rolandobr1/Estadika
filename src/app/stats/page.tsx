@@ -21,19 +21,49 @@ import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { LoadingModal } from '@/components/ui/loader';
-import { getTournamentById, getFinishedGames, saveTournament, deleteLiveGame, saveLiveGame, getLiveGame, deleteFinishedGames } from '@/lib/db';
+import { getTournamentById, getFinishedGames, saveTournament, deleteLiveGame, saveLiveGame, getLiveGame, deleteFinishedGames, deleteTournament as deleteTournamentFromDb } from '@/lib/db';
 import { createInitialPlayerStats, createInitialGame } from '@/lib/game-utils';
 
-const StandingsTable = ({ teams }: { teams: TournamentTeam[] }) => {
+const StandingsTable = ({ teams, matches }: { teams: TournamentTeam[], matches: TournamentMatch[] }) => {
     const sortedTeams = useMemo(() => {
-        return [...teams].sort((a, b) => {
+        
+        const teamsWithStats = teams.map(team => {
+            let wins = 0;
+            let losses = 0;
+            let pointsFor = 0;
+            let pointsAgainst = 0;
+
+            matches.forEach(match => {
+                if (match.status !== 'FINISHED') return;
+
+                const isTeam1 = match.team1.id === team.id;
+                const isTeam2 = match.team2.id === team.id;
+
+                if (isTeam1 || isTeam2) {
+                    const teamScore = isTeam1 ? (match.team1.score ?? 0) : (match.team2.score ?? 0);
+                    const opponentScore = isTeam1 ? (match.team2.score ?? 0) : (match.team1.score ?? 0);
+
+                    pointsFor += teamScore;
+                    pointsAgainst += opponentScore;
+
+                    if (teamScore > opponentScore) {
+                        wins++;
+                    } else if (opponentScore > teamScore) {
+                        losses++;
+                    }
+                }
+            });
+            return { ...team, wins, losses, pointsFor, pointsAgainst };
+        });
+
+        return teamsWithStats.sort((a, b) => {
             if (a.wins !== b.wins) return b.wins - a.wins;
             const pointsDiffA = a.pointsFor - a.pointsAgainst;
             const pointsDiffB = b.pointsFor - b.pointsAgainst;
             if (pointsDiffA !== pointsDiffB) return pointsDiffB - pointsDiffA;
             return b.pointsFor - a.pointsFor;
         });
-    }, [teams]);
+    }, [teams, matches]);
 
     return (
         <Card>
@@ -860,17 +890,10 @@ function TournamentDetailsContent() {
         await saveTournament(updatedTournament);
     };
     
-    const deleteTournament = async () => {
+    const handleDeleteTournament = async () => {
         if (!tournament) return;
         
-        // Note: This does not delete associated games from history, they just lose their link.
-        // A more robust solution might involve a batch delete of games.
-        const storedTournamentsRaw = localStorage.getItem('tournaments');
-        if (storedTournamentsRaw) {
-            const allTournaments: Tournament[] = JSON.parse(storedTournamentsRaw);
-            const updatedTournaments = allTournaments.filter(t => t.id !== tournament.id);
-            localStorage.setItem('tournaments', JSON.stringify(updatedTournaments));
-        }
+        await deleteTournamentFromDb(tournament.id);
 
         toast({
             title: "Torneo Eliminado",
@@ -940,12 +963,12 @@ function TournamentDetailsContent() {
                                     <AlertDialogHeader>
                                         <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
                                         <AlertDialogDescription>
-                                        Esta acción no se puede deshacer. Se eliminará permanentemente el torneo y todos sus datos de partidos asociados.
+                                        Esta acción no se puede deshacer. Se eliminará permanentemente el torneo. Los partidos jugados permanecerán en el historial general.
                                         </AlertDialogDescription>
                                     </AlertDialogHeader>
                                     <AlertDialogFooter>
                                         <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                        <AlertDialogAction onClick={deleteTournament}>Sí, eliminar</AlertDialogAction>
+                                        <AlertDialogAction onClick={handleDeleteTournament}>Sí, eliminar</AlertDialogAction>
                                     </AlertDialogFooter>
                                 </AlertDialogContent>
                             </AlertDialog>
@@ -962,7 +985,7 @@ function TournamentDetailsContent() {
                     <TabsTrigger value="history">Historial</TabsTrigger>
                 </TabsList>
                  <TabsContent value="standings">
-                    <StandingsTable teams={tournament.teams} />
+                    <StandingsTable teams={tournament.teams} matches={tournament.matches} />
                 </TabsContent>
                 <TabsContent value="schedule">
                     <Schedule tournament={tournament} onUpdate={updateTournament} />
@@ -985,3 +1008,4 @@ export default function TournamentDetailsPage() {
         </Suspense>
     )
 }
+
