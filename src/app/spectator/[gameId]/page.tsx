@@ -16,15 +16,16 @@ export default function SpectatorPage() {
     const params = useParams();
     const gameId = params.gameId as string;
     const [game, setGame] = useState<Game | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
+    const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         if (!gameId) {
             setError("No se ha proporcionado un ID de partido.");
-            setIsLoading(false);
             return;
         };
+        
+        setIsLoading(true);
 
         const liveGameRef = doc(db, LIVE_GAME_COLLECTION, gameId);
 
@@ -76,6 +77,8 @@ export default function SpectatorPage() {
         return `${Math.floor(clock / 60).toString().padStart(2, '0')}:${(clock % 60).toString().padStart(2, '0')}`;
     }
 
+    if (!isLoading && !game && !error) return null;
+    
     if (isLoading) {
         return <LoadingModal />;
     }
