@@ -185,23 +185,25 @@ export default function GameSetupPage() {
     const [isAwayLoadOpen, setIsAwayLoadOpen] = useState(false);
 
     const [error, setError] = useState<string | null>(null);
-    const [gameInProgress, setGameInProgress] = useState(false);
+    const [gameInProgress, setGameInProgress] = useState<boolean | undefined>(undefined);
     const [isLoading, setIsLoading] = useState(true);
     const [isStartingGame, setIsStartingGame] = useState(false);
     
     useEffect(() => {
-        if (typeof window === 'undefined') {
-            setIsLoading(false);
-            return;
-        }
-
         async function loadData() {
+            if (typeof window === 'undefined') {
+                setIsLoading(false);
+                return;
+            }
+
             try {
                 const liveGame = await getLiveGame();
                 if (liveGame) {
                     setGameInProgress(true);
+                    setIsLoading(false); // Stop loading if we find a game
                     return;
                 }
+                setGameInProgress(false);
 
                 const [playersFromDb, teamsFromDb] = await Promise.all([getPlayers(), getTeams()]);
                 setRoster(playersFromDb);
@@ -437,7 +439,7 @@ export default function GameSetupPage() {
         </div>
     );
 
-    if (isLoading) {
+    if (isLoading || gameInProgress === undefined) {
         return <LoadingModal />;
     }
 
@@ -545,7 +547,7 @@ export default function GameSetupPage() {
                                     <div className={cn("transition-opacity", gameSettings.timeoutSettings.mode !== 'total' && 'opacity-50')}>
                                         <GameSettingInput label="Tiempos Totales" value={gameSettings.timeoutSettings.timeoutsTotal} onChange={val => handleTimeoutSettingChange('timeoutsTotal', val)} disabled={gameSettings.timeoutSettings.mode !== 'total'} />
                                     </div>
-                                    <GameSettingInput label="Tiempos (Prórroga)" value={gameSettings.timeoutsOvertime} onChange={val => handleGameSettingChange('timeoutsOvertime', val)} />
+                                    <GameSettingInput label="Tiempos (Prórroga)" value={gameSettings.timeoutsOvertime} onChange={val => handleSettingChange('timeoutsOvertime', val)} />
                                 </div>
                                 <div className={cn("pt-4 space-y-4", gameSettings.timeoutSettings.mode !== 'per_quarter_custom' && 'hidden')}>
                                     <Label className="font-semibold">Tiempos Muertos por Cuarto</Label>

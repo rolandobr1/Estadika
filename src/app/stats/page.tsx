@@ -189,7 +189,7 @@ const Schedule = ({ tournament, onUpdate }: { tournament: Tournament, onUpdate: 
     const { toast } = useToast();
     const router = useRouter();
     const [showGameInProgressDialog, setShowGameInProgressDialog] = useState(false);
-    const [liveGameInfo, setLiveGameInfo] = useState<{id: string, tournamentId?: string, matchId?: string} | null>(null);
+    const [liveGameInfo, setLiveGameInfo] = useState<{id: string, tournamentId?: string, matchId?: string} | null | undefined>(undefined);
     const [isAddMatchModalOpen, setIsAddMatchModalOpen] = useState(false);
     const [isStartingMatch, setIsStartingMatch] = useState(false);
 
@@ -303,7 +303,6 @@ const Schedule = ({ tournament, onUpdate }: { tournament: Tournament, onUpdate: 
 
         newGame.id = `game_${match.id}`;
         newGame.settings = finalGameSettings;
-        newGame.gameClock = finalGameSettings.quarterLength;
         newGame.homeTeam = createTeamInGame(homeTournamentTeam, 'homeTeam');
         newGame.awayTeam = createTeamInGame(awayTournamentTeam, 'awayTeam');
         newGame.tournamentId = tournament.id;
@@ -358,6 +357,10 @@ const Schedule = ({ tournament, onUpdate }: { tournament: Tournament, onUpdate: 
     };
 
     const renderMatchControls = (match: TournamentMatch) => {
+        if (liveGameInfo === undefined) {
+            return <Skeleton className="h-9 w-32" />;
+        }
+
         const isMatchInProgress = liveGameInfo?.matchId === match.id;
 
         if (match.status === 'FINISHED') {

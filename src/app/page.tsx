@@ -6,10 +6,11 @@ import { useEffect, useState } from 'react';
 import { BarChart3, Trophy, Users, Zap } from 'lucide-react';
 import { RiBasketballLine } from "react-icons/ri";
 import { ActionCard } from '@/components/ui/action-card';
+import { Skeleton } from '@/components/ui/skeleton';
 
 
 export default function Home() {
-  const [activeGame, setActiveGame] = useState(false);
+  const [activeGame, setActiveGame] = useState<boolean | undefined>(undefined);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -73,16 +74,25 @@ export default function Home() {
           </div>
 
           <div className="grid gap-3">
-            {menuActions.map((action) => (
-              <ActionCard
-                key={action.href}
-                href={action.href}
-                title={action.title}
-                description={action.description}
-                icon={action.icon}
-                variant={action.variant}
-              />
-            ))}
+             {activeGame === undefined ? (
+              <>
+                <Skeleton className="h-[74px] w-full" />
+                <Skeleton className="h-[74px] w-full" />
+                <Skeleton className="h-[74px] w-full" />
+                <Skeleton className="h-[74px] w-full" />
+              </>
+            ) : (
+                menuActions.map((action) => (
+                <ActionCard
+                    key={action.href}
+                    href={action.href}
+                    title={action.title}
+                    description={action.description}
+                    icon={action.icon}
+                    variant={action.variant}
+                />
+                ))
+            )}
           </div>
         </div>
 
