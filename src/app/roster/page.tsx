@@ -21,8 +21,8 @@ import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
-import { Skeleton } from '@/components/ui/skeleton';
 import { LoadingModal } from '@/components/ui/loader';
+import { getPlayers, savePlayer, deletePlayers as deletePlayersFromDb, importPlayers, getTeams, saveTeam, deleteTeams as deleteTeamsFromDb, importTeams } from '@/lib/roster';
 
 const playerSchema = z.object({
   id: z.string().optional(),
@@ -168,12 +168,13 @@ const TeamForm = ({
         availablePlayers.filter(player => player.name.toLowerCase().includes(searchTerm.toLowerCase()))
     , [availablePlayers, searchTerm]);
 
-    function onSubmit(values: z.infer<typeof teamSchema>) {
+    async function onSubmit(values: z.infer<typeof teamSchema>) {
         const teamToSave: Team = {
             id: values.id || `team_${Date.now()}`,
             name: values.name,
             playerIds: values.playerIds,
         };
+        await saveTeam(teamToSave);
         onSave(teamToSave);
         toast({
             title: "Equipo Guardado",
@@ -286,7 +287,7 @@ const ImportDialog = ({
             <DialogHeader>
                 <DialogTitle>Confirmar Importación</DialogTitle>
                 <DialogDescription>
-                    Has cargado un archivo con {itemCount} {itemType}. Los nuevos elementos se añadirán a tu lista existente. Se omitirán los duplicados por ID.
+                    Has cargado un archivo con {itemCount} {itemType}. Los nuevos elementos se añadirán a tu base de datos. Se omitirán los duplicados por ID.
                 </DialogDescription>
             </DialogHeader>
             <DialogFooter>
@@ -296,14 +297,6 @@ const ImportDialog = ({
         </DialogContent>
     </Dialog>
 );
-
-const seedData = () => {
-    const finalPlayers: Player[] = [];
-    const finalTeams: Team[] = [];
-    localStorage.setItem('players', JSON.stringify(finalPlayers));
-    localStorage.setItem('teams', JSON.stringify(finalTeams));
-    return { players: finalPlayers, teams: finalTeams };
-};
 
 
 export default function RosterPage() {
@@ -323,40 +316,24 @@ export default function RosterPage() {
   const teamFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (typeof window === 'undefined') {
-        setIsLoading(false);
-        return;
+    async function loadData() {
+        try {
+            const [playersFromDb, teamsFromDb] = await Promise.all([getPlayers(), getTeams()]);
+            setPlayers(playersFromDb);
+            setTeams(teamsFromDb);
+        } catch (error) {
+            console.error("Error loading data from Firestore:", error);
+            toast({
+                variant: 'destructive',
+                title: 'Error al cargar datos',
+                description: 'No se pudieron obtener los datos de la base de datos.',
+            });
+        } finally {
+            setIsLoading(false);
+        }
     }
-    const storedPlayers = localStorage.getItem('players');
-    const storedTeams = localStorage.getItem('teams');
-    
-    if (storedPlayers && storedTeams) {
-        setPlayers(JSON.parse(storedPlayers));
-        setTeams(JSON.parse(storedTeams));
-    } else {
-        const { players: seededPlayers, teams: seededTeams } = seedData();
-        setPlayers(seededPlayers);
-        setTeams(seededTeams);
-        toast({
-            title: "¡Bienvenido!",
-            description: "Es hora de crear tu primer jugador y equipo.",
-        });
-    }
-
-    setIsLoading(false);
-  }, []);
-
-  useEffect(() => {
-    if (!isLoading && typeof window !== 'undefined') {
-      localStorage.setItem('players', JSON.stringify(players));
-    }
-  }, [players, isLoading]);
-
-   useEffect(() => {
-    if (!isLoading && typeof window !== 'undefined') {
-      localStorage.setItem('teams', JSON.stringify(teams));
-    }
-  }, [teams, isLoading]);
+    loadData();
+  }, [toast]);
 
   const playerForm = useForm<z.infer<typeof playerSchema>>({
     resolver: zodResolver(playerSchema),
@@ -372,31 +349,35 @@ export default function RosterPage() {
     players.filter(p => p.name.toLowerCase().includes(playerSearch.toLowerCase()))
   , [players, playerSearch]);
 
-  function onPlayerSubmit(values: z.infer<typeof playerSchema>) {
-    if (values.id) { // Editing existing player
-        setPlayers(prev => prev.map(p => p.id === values.id ? { ...p, ...values } : p));
+  async function onPlayerSubmit(values: z.infer<typeof playerSchema>) {
+    const isEditing = !!values.id;
+    const playerToSave: Player = {
+        ...values,
+        id: values.id || `player_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+    };
+    
+    await savePlayer(playerToSave);
+    
+    if (isEditing) {
+        setPlayers(prev => prev.map(p => p.id === playerToSave.id ? playerToSave : p));
         toast({
             title: "Jugador Actualizado",
             description: `Los datos de "${values.name}" han sido actualizados.`,
         });
-    } else { // Adding new player
-        const newPlayer: Player = {
-            id: `player_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-            ...values,
-        };
-        setPlayers(prev => [...prev, newPlayer]);
+    } else {
+        setPlayers(prev => [...prev, playerToSave]);
         toast({
             title: "Jugador Añadido",
-            description: `"${newPlayer.name}" ha sido añadido a tu plantilla.`,
+            description: `"${playerToSave.name}" ha sido añadido a tu plantilla.`,
         });
     }
     setEditingPlayer(null);
     playerForm.reset({ name: '', number: undefined, position: '' });
   }
 
-  function deletePlayers(ids: string[]) {
+  async function deletePlayers(ids: string[]) {
+    await deletePlayersFromDb(ids);
     setPlayers(prev => prev.filter(p => !ids.includes(p.id)));
-    // Also remove player from any teams
     setTeams(prev => prev.map(team => ({
         ...team,
         playerIds: team.playerIds.filter(playerId => !ids.includes(playerId))
@@ -411,9 +392,9 @@ export default function RosterPage() {
   const handleTogglePlayerSelection = (id: string, selectAll?: boolean, allPlayerIds?: string[]) => {
       if (selectAll) {
           if (selectedPlayerIds.size === allPlayerIds?.length) {
-              setSelectedPlayerIds(new Set()); // Deselect all
+              setSelectedPlayerIds(new Set());
           } else {
-              setSelectedPlayerIds(new Set(allPlayerIds)); // Select all
+              setSelectedPlayerIds(new Set(allPlayerIds));
           }
       } else {
           setSelectedPlayerIds(prev => {
@@ -450,7 +431,8 @@ export default function RosterPage() {
     setEditingTeam(null);
   };
 
-  const deleteTeams = (ids: string[]) => {
+  async function deleteTeams(ids: string[]) {
+    await deleteTeamsFromDb(ids);
     setTeams(prev => prev.filter(t => !ids.includes(t.id)));
     setSelectedTeamIds(new Set());
     toast({
@@ -462,9 +444,9 @@ export default function RosterPage() {
   const handleToggleTeamSelection = (id: string, selectAll?: boolean, allTeamIds?: string[]) => {
       if (selectAll) {
           if (selectedTeamIds.size === allTeamIds?.length) {
-              setSelectedTeamIds(new Set()); // Deselect all
+              setSelectedTeamIds(new Set());
           } else {
-              setSelectedTeamIds(new Set(allTeamIds)); // Select all
+              setSelectedTeamIds(new Set(allTeamIds));
           }
       } else {
           setSelectedTeamIds(prev => {
@@ -477,7 +459,7 @@ export default function RosterPage() {
   }
   
   const parseCsv = (content: string, headers: string[]): any[] => {
-    const rows = content.trim().split('\n').slice(1); // Skip header row
+    const rows = content.trim().split('\n').slice(1);
     return rows.map(row => {
         const values = row.split(',');
         const obj: any = {};
@@ -523,27 +505,26 @@ export default function RosterPage() {
               }
           };
           reader.readAsText(file);
-          event.target.value = ''; // Reset input
+          event.target.value = '';
       }
   };
 
-  // --- Import / Export Logic ---
-    const convertToCsv = (data: any[], headers: string[]): string => {
+  const convertToCsv = (data: any[], headers: string[]): string => {
         const csvRows = [];
-        csvRows.push(headers.join(',')); // Add header row
+        csvRows.push(headers.join(','));
 
         for (const row of data) {
             const values = headers.map(header => {
                 let value = row[header];
                 if (header === 'playerIds' && Array.isArray(value)) {
-                    value = value.join(';'); // Use semicolon for playerIds array
+                    value = value.join(';');
                 }
                 if (value === null || value === undefined) {
                     value = '';
                 }
                 const stringValue = String(value);
                 if (stringValue.includes(',')) {
-                    return `"${stringValue.replace(/"/g, '""')}"`; // Handle commas and quotes
+                    return `"${stringValue.replace(/"/g, '""')}"`;
                 }
                 return stringValue;
             });
@@ -579,48 +560,23 @@ export default function RosterPage() {
     toast({ title: `Equipo "${team.name}" exportado a CSV` });
   }
 
-  const confirmImport = () => {
+  async function confirmImport() {
     if (!importDialog) return;
     const { type, data } = importDialog;
     let newItemsCount = 0;
 
     if (type === 'players') {
         const typedData = data as Player[];
-        const existingIds = new Set(players.map(p => p.id));
-        const newPlayers: Player[] = [];
-
-        for (const p of typedData) {
-            if (p.id && existingIds.has(p.id)) {
-                continue;
-            }
-            if (!p.id) {
-                p.id = `player_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-            }
-            newPlayers.push(p);
-        }
-
-        setPlayers(prev => [...prev, ...newPlayers]);
-        newItemsCount = newPlayers.length;
-
-    } else { // teams
+        newItemsCount = await importPlayers(typedData);
+        const updatedPlayers = await getPlayers();
+        setPlayers(updatedPlayers);
+    } else {
         const typedData = data as Team[];
-        const existingIds = new Set(teams.map(t => t.id));
-        const newTeams: Team[] = [];
-
-        for (const t of typedData) {
-             if (t.id && existingIds.has(t.id)) {
-                continue;
-            }
-            if (!t.id) {
-                t.id = `team_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-            }
-            newTeams.push(t);
-        }
-        
-        setTeams(prev => [...prev, ...newTeams]);
-        newItemsCount = newTeams.length;
+        newItemsCount = await importTeams(typedData);
+        const updatedTeams = await getTeams();
+        setTeams(updatedTeams);
     }
-    toast({ title: '¡Importación completada!', description: `${newItemsCount} nuevos elementos añadidos.` });
+    toast({ title: '¡Importación completada!', description: `${newItemsCount} nuevos elementos añadidos a la base de datos.` });
     setImportDialog(null);
   };
   
@@ -951,5 +907,3 @@ export default function RosterPage() {
     </>
   );
 }
-
-    
