@@ -43,6 +43,7 @@ export default function CreateTournamentPage() {
   const [playoffsEnabled, setPlayoffsEnabled] = useState(false);
   const [finalFormat, setFinalFormat] = useState<PlayoffFormat>('best-of-3');
   const [isLoading, setIsLoading] = useState(true);
+  const [isCreating, setIsCreating] = useState(false);
 
 
   useEffect(() => {
@@ -155,54 +156,68 @@ export default function CreateTournamentPage() {
       return;
     }
 
-    const participatingTeams: TournamentTeam[] = allTeams
-      .filter(team => selectedTeamIds.has(team.id))
-      .map(team => {
-        const tournamentPlayers: TournamentPlayer[] = allPlayers
-          .filter(player => team.playerIds.includes(player.id))
-          .map(player => ({ ...player }));
+    setIsCreating(true);
 
-        return {
-          id: team.id,
-          name: team.name,
-          players: tournamentPlayers,
-          wins: 0,
-          losses: 0,
-          pointsFor: 0,
-          pointsAgainst: 0,
+    try {
+        const participatingTeams: TournamentTeam[] = allTeams
+          .filter(team => selectedTeamIds.has(team.id))
+          .map(team => {
+            const tournamentPlayers: TournamentPlayer[] = allPlayers
+              .filter(player => team.playerIds.includes(player.id))
+              .map(player => ({ ...player }));
+
+            return {
+              id: team.id,
+              name: team.name,
+              players: tournamentPlayers,
+              wins: 0,
+              losses: 0,
+              pointsFor: 0,
+              pointsAgainst: 0,
+            };
+          });
+          
+        const tournamentId = `tourn_${Date.now()}`;
+        const numRounds = parseInt(tournamentRounds, 10);
+        
+        let matches: TournamentMatch[] = [];
+        if (scheduleGeneration === 'random') {
+            matches = generateSchedule(Array.from(selectedTeamIds), tournamentId, tournamentFormat, numRounds);
+        }
+        
+        const newTournament: Tournament = {
+          id: tournamentId,
+          name: tournamentName,
+          teams: participatingTeams,
+          matches,
+          gameSettings,
+          format: tournamentFormat,
+          rounds: numRounds,
+          playoffSettings: {
+            enabled: playoffsEnabled,
+            ...(playoffsEnabled && { finalFormat: finalFormat }),
+          }
         };
-      });
-      
-    const tournamentId = `tourn_${Date.now()}`;
-    const numRounds = parseInt(tournamentRounds, 10);
-    
-    let matches: TournamentMatch[] = [];
-    if (scheduleGeneration === 'random') {
-        matches = generateSchedule(Array.from(selectedTeamIds), tournamentId, tournamentFormat, numRounds);
+        
+        await saveTournament(newTournament);
+
+        toast({
+          title: '¡Torneo Creado!',
+          description: `El torneo "${tournamentName}" ha sido creado con ${participatingTeams.length} equipos.`,
+        });
+
+        router.push('/tournaments');
+
+    } catch (error) {
+        console.error("Failed to create tournament:", error);
+        toast({
+            title: 'Error al Crear Torneo',
+            description: 'No se pudo guardar el torneo. Por favor, inténtalo de nuevo.',
+            variant: 'destructive',
+        });
+    } finally {
+        setIsCreating(false);
     }
-    
-    const newTournament: Tournament = {
-      id: tournamentId,
-      name: tournamentName,
-      teams: participatingTeams,
-      matches,
-      gameSettings,
-      format: tournamentFormat,
-      rounds: numRounds,
-      playoffSettings: {
-        enabled: playoffsEnabled,
-        ...(playoffsEnabled && { finalFormat: finalFormat }),
-      }
-    };
-    
-    await saveTournament(newTournament);
-
-    toast({
-      title: '¡Torneo Creado!',
-      description: `El torneo "${tournamentName}" ha sido creado con ${participatingTeams.length} equipos.`,
-    });
-
-    router.push('/tournaments');
   };
 
   const GameSettingInput = ({ label, value, onChange, disabled = false, min = 0 }: { label: string, value: number, onChange: (value: number) => void, disabled?: boolean, min?: number }) => (
@@ -225,6 +240,8 @@ export default function CreateTournamentPage() {
   }
 
   return (
+    <>
+    {isCreating && <LoadingModal text="Creando torneo..." />}
     <div className="container mx-auto px-4 py-8">
       <div className="mb-6">
         <Button asChild variant="ghost" className="mb-4 pl-0">
@@ -473,12 +490,13 @@ export default function CreateTournamentPage() {
                 </CardContent>
             </Card>
 
-          <Button size="lg" className="w-full" onClick={handleCreateTournament}>
+          <Button size="lg" className="w-full" onClick={handleCreateTournament} disabled={isCreating}>
              <Trophy className="mr-2 h-5 w-5" />
-            Crear Torneo
+            {isCreating ? 'Creando...' : 'Crear Torneo'}
           </Button>
         </div>
       </div>
     </div>
+    </>
   );
 }
