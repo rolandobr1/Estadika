@@ -36,25 +36,28 @@ export default function Home() {
       href: activeGame ? '/game/live' : '/game/setup',
       icon: Zap,
       description: activeGame ? 'Continúa donde lo dejaste.' : 'Configura un nuevo juego.',
-      variant: 'accent' as const,
+      variant: activeGame ? 'accent' : 'default',
     },
     {
       title: 'Gestión Plantilla',
       href: '/roster',
       icon: Users,
       description: 'Añade y edita tus jugadores y equipos.',
+      variant: 'default' as const,
     },
     {
       title: 'Modo Torneo',
       href: '/tournaments',
       icon: Trophy,
       description: 'Crea y administra tus competiciones.',
+      variant: 'default' as const,
     },
     {
       title: 'Historial',
       href: '/history',
       icon: BarChart3,
       description: 'Revisa estadísticas de juegos pasados.',
+      variant: 'default' as const,
     },
   ];
 
@@ -77,7 +80,7 @@ export default function Home() {
                 title={action.title}
                 description={action.description}
                 icon={action.icon}
-                variant={action.variant || 'default'}
+                variant={action.variant}
               />
             ))}
           </div>
