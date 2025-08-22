@@ -1,10 +1,11 @@
 
 import { db } from '@/lib/firebase';
 import { collection, getDocs, doc, setDoc, deleteDoc, writeBatch, getDoc, query, where } from 'firebase/firestore';
-import type { Player, Team } from '@/lib/types';
+import type { Player, Team, Tournament } from '@/lib/types';
 
 const PLAYERS_COLLECTION = 'players';
 const TEAMS_COLLECTION = 'teams';
+const TOURNAMENTS_COLLECTION = 'tournaments';
 
 // Player Functions
 export async function getPlayers(): Promise<Player[]> {
@@ -98,4 +99,17 @@ export async function importTeams(teams: Team[]): Promise<number> {
 
     await batch.commit();
     return newItemsCount;
+}
+
+// Tournament Functions
+export async function getTournaments(): Promise<Tournament[]> {
+    const tournamentsCol = collection(db, TOURNAMENTS_COLLECTION);
+    const tournamentSnapshot = await getDocs(tournamentsCol);
+    const tournamentList = tournamentSnapshot.docs.map(doc => doc.data() as Tournament);
+    return tournamentList;
+}
+
+export async function saveTournament(tournament: Tournament): Promise<void> {
+    const tournamentRef = doc(db, TOURNAMENTS_COLLECTION, tournament.id);
+    await setDoc(tournamentRef, tournament, { merge: true });
 }

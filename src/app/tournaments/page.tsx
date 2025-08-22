@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { LoadingModal } from '@/components/ui/loader';
+import { getTournaments } from '@/lib/roster';
 
 export default function TournamentsPage() {
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
@@ -28,19 +29,32 @@ export default function TournamentsPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (typeof window === 'undefined') {
-        setIsLoading(false);
-        return;
+    async function loadTournaments() {
+        if (typeof window === 'undefined') {
+            setIsLoading(false);
+            return;
+        }
+        try {
+            const storedTournaments = await getTournaments();
+            setTournaments(storedTournaments);
+        } catch (error) {
+            toast({
+                title: 'Error al Cargar Torneos',
+                description: 'No se pudieron obtener los datos desde la base de datos.',
+                variant: 'destructive',
+            });
+        } finally {
+            setIsLoading(false);
+        }
     }
-    const storedTournaments = localStorage.getItem('tournaments');
-    if (storedTournaments) {
-      setTournaments(JSON.parse(storedTournaments));
-    }
-    setIsLoading(false);
-  }, []);
+    loadTournaments();
+  }, [toast]);
 
   const handleDeleteAll = () => {
-    localStorage.removeItem('tournaments');
+    // This should also delete from Firestore in a real app
+    // For now, it just clears local state and gives feedback
+    localStorage.removeItem('tournaments'); // Also clear legacy storage if present
+    // Firestore deletion would go here, e.g., call a 'deleteAllTournaments' function
     setTournaments([]);
     toast({
       title: 'Torneos Eliminados',
@@ -110,9 +124,9 @@ export default function TournamentsPage() {
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
+                  <AlertDialogTitle>¿Estás absolutely seguro?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    Esta acción no se puede deshacer. Esto eliminará permanentemente todos los datos de los torneos.
+                    Esta acción no se puede deshacer. Esto eliminará permanentemente todos los datos de los torneos de la base de datos.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>

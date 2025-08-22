@@ -20,7 +20,7 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { LoadingModal } from '@/components/ui/loader';
-import { getTeams, getPlayers } from '@/lib/roster';
+import { getTeams, getPlayers, saveTournament } from '@/lib/roster';
 
 type ScheduleGenerationOption = 'random' | 'manual';
 
@@ -137,7 +137,7 @@ export default function CreateTournamentPage() {
       return matches;
   }
 
-  const handleCreateTournament = () => {
+  const handleCreateTournament = async () => {
     if (!tournamentName.trim()) {
       toast({
         variant: 'destructive',
@@ -201,10 +201,8 @@ export default function CreateTournamentPage() {
         finalFormat: playoffsEnabled ? finalFormat : undefined,
       }
     };
-
-    const existingTournaments: Tournament[] = JSON.parse(localStorage.getItem('tournaments') || '[]');
-    existingTournaments.push(newTournament);
-    localStorage.setItem('tournaments', JSON.stringify(existingTournaments));
+    
+    await saveTournament(newTournament);
 
     toast({
       title: '¡Torneo Creado!',
