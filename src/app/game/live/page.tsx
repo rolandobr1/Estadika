@@ -5,7 +5,7 @@ import { useReducer, useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { ChevronLeft, ChevronRight, Pause, Play, Redo, SkipForward, Plus, Minus, Save, ArrowRightLeft, ShieldAlert, Undo, Clock, ListCollapse, BarChartHorizontal, Download, Timer, Settings } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Pause, Play, Redo, SkipForward, Plus, Minus, Save, ArrowRightLeft, ShieldAlert, Undo, Clock, ListCollapse, BarChartHorizontal, Download, Timer, Settings, Share2 } from 'lucide-react';
 import { PiUserSwitchBold } from "react-icons/pi";
 import { IoStatsChart } from "react-icons/io5";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -27,124 +27,6 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Input } from '@/components/ui/input';
 import { LoadingModal } from '@/components/ui/loader';
 import { getLiveGame, saveFinishedGame, deleteLiveGame, saveTournament, getTournamentById, saveLiveGame } from '@/lib/db';
-
-// Reducer to manage game state by processing actions and updating the log
-function gameReducer(state: Game, action: GameAction): Game {
-    if (state.status === 'FINISHED' && !['GAME_END', 'GAME_START', 'REOPEN_GAME'].includes(action.type)) {
-        return state;
-    }
-    
-    const incrementalActions: ActionType[] = [
-        'SCORE_UPDATE', 'STAT_UPDATE', 'TIMEOUT', 'SUBSTITUTION', 'ADD_PLAYER_TO_COURT',
-        'QUARTER_CHANGE', 'MANUAL_TIMER_ADJUST', 'SET_TIMER'
-    ];
-
-    if (incrementalActions.includes(action.type)) {
-        return applyActionToGameState(state, action);
-    }
-
-    // For other actions, handle them with the existing logic
-    switch (action.type) {
-        case 'GAME_START':
-            return produce(state, draft => {
-                Object.assign(draft, action.payload);
-            });
-        
-        case 'TIMER_CHANGE':
-            return produce(state, draft => {
-                 if (action.payload.timerState === 'PLAY') draft.clockIsRunning = true;
-                 if (action.payload.timerState === 'PAUSE') draft.clockIsRunning = false;
-                 if (action.payload.timerState === 'RESET') {
-                    draft.clockIsRunning = false;
-                    const newClockValue = draft.currentQuarter > draft.settings.quarters
-                        ? draft.settings.overtimeLength
-                        : draft.settings.quarterLength;
-                    draft.gameClock = newClockValue;
-                 }
-            });
-        
-        case 'TICK':
-            return produce(state, draft => {
-                if (draft.isTimeoutActive) {
-                    draft.timeoutClock = Math.max(0, draft.timeoutClock - 1);
-                    if (draft.timeoutClock === 0) {
-                        draft.isTimeoutActive = false;
-                        draft.timeoutCaller = undefined;
-                        // Don't auto-start clock, let user do it
-                    }
-                } else if (draft.clockIsRunning) {
-                    draft.gameClock = Math.max(0, draft.gameClock - 1);
-                    if (draft.gameClock === 0) {
-                        draft.clockIsRunning = false;
-                        
-                        // Apply the quarter change logic directly to the draft
-                        applyActionToGameState(draft as Game, {
-                            type: 'QUARTER_CHANGE',
-                            id: `action_${Date.now()}`,
-                            timestamp: Date.now(),
-                            description: `Final del periodo ${draft.currentQuarter}.`,
-                            payload: { newQuarter: draft.currentQuarter + 1, quarter: draft.currentQuarter, gameClock: 0, homeScore: draft.homeTeam.stats.score, awayScore: draft.awayTeam.stats.score }
-                        }, false);
-                    }
-                }
-            });
-            
-        case 'GAME_END': {
-             const finalState = produce(state, draft => {
-                const endAction: GameAction = {
-                    id: `action_${Date.now()}`,
-                    type: 'GAME_END',
-                    timestamp: Date.now(),
-                    description: 'El partido ha finalizado.',
-                    payload: {
-                        quarter: draft.currentQuarter,
-                        gameClock: draft.gameClock,
-                        homeScore: draft.homeTeam.stats.score,
-                        awayScore: draft.awayTeam.stats.score,
-                    },
-                };
-                draft.gameLog.push(endAction);
-                draft.status = 'FINISHED';
-                draft.clockIsRunning = false;
-             });
-             return finalState;
-        }
-
-        case 'REOPEN_GAME': {
-            const gameToReopen: Game = action.payload as any;
-            
-            // Re-establish the full game state from payload
-            let nextState = produce(gameToReopen, draft => {
-                draft.status = 'IN_PROGRESS';
-                draft.clockIsRunning = false;
-
-                // Remove the GAME_END action from the log
-                const gameEndIndex = draft.gameLog.findIndex(a => a.type === 'GAME_END');
-                if (gameEndIndex > -1) {
-                    draft.gameLog.splice(gameEndIndex, 1);
-                }
-            });
-
-            // Recalculate to ensure everything is consistent after removing the end action
-            return recalculateGameStateFromLog(nextState, nextState.gameLog);
-        }
-        
-        case 'UNDO_LAST_ACTION': {
-             if(state.gameLog.length === 0) return state;
-             const newState = createInitialGame();
-             return produce(newState, draft => {
-                Object.assign(draft, baseGame);
-                const newLog = state.gameLog.slice(0, -1);
-                draft.gameLog = newLog;
-                const recalculatedState = recalculateGameStateFromLog(draft as Game, newLog);
-                Object.assign(draft, recalculatedState);
-             });
-        }
-        default:
-             return state;
-    }
-}
-
 
 const StatBadge = ({ value, label, color }: { value: number, label: string, color: string }) => (
     <div className="flex flex-col items-center">
@@ -511,8 +393,7 @@ export default function LiveGamePage() {
   const router = useRouter();
   const { toast } = useToast();
   const [baseGame, setBaseGame] = useState(createInitialGame());
-  const [game, dispatch] = useReducer(gameReducer, baseGame);
-  const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
+  
   const [lastActionKey, setLastActionKey] = useState<string | null>(null);
   const [editingPlayer, setEditingPlayer] = useState<EditingPlayerInfo | null>(null);
   const [substitutionState, setSubstitutionState] = useState<SubstitutionState>(null);
@@ -522,6 +403,125 @@ export default function LiveGamePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isFinishingGame, setIsFinishingGame] = useState(false);
 
+  // Reducer to manage game state by processing actions and updating the log
+  const gameReducer = (state: Game, action: GameAction): Game => {
+    if (state.status === 'FINISHED' && !['GAME_END', 'GAME_START', 'REOPEN_GAME'].includes(action.type)) {
+        return state;
+    }
+    
+    const incrementalActions: ActionType[] = [
+        'SCORE_UPDATE', 'STAT_UPDATE', 'TIMEOUT', 'SUBSTITUTION', 'ADD_PLAYER_TO_COURT',
+        'QUARTER_CHANGE', 'MANUAL_TIMER_ADJUST', 'SET_TIMER'
+    ];
+
+    if (incrementalActions.includes(action.type)) {
+        return applyActionToGameState(state, action);
+    }
+
+    // For other actions, handle them with the existing logic
+    switch (action.type) {
+        case 'GAME_START':
+            return produce(state, draft => {
+                Object.assign(draft, action.payload);
+            });
+        
+        case 'TIMER_CHANGE':
+            return produce(state, draft => {
+                 if (action.payload.timerState === 'PLAY') draft.clockIsRunning = true;
+                 if (action.payload.timerState === 'PAUSE') draft.clockIsRunning = false;
+                 if (action.payload.timerState === 'RESET') {
+                    draft.clockIsRunning = false;
+                    const newClockValue = draft.currentQuarter > draft.settings.quarters
+                        ? draft.settings.overtimeLength
+                        : draft.settings.quarterLength;
+                    draft.gameClock = newClockValue;
+                 }
+            });
+        
+        case 'TICK':
+            return produce(state, draft => {
+                if (draft.isTimeoutActive) {
+                    draft.timeoutClock = Math.max(0, draft.timeoutClock - 1);
+                    if (draft.timeoutClock === 0) {
+                        draft.isTimeoutActive = false;
+                        draft.timeoutCaller = undefined;
+                        // Don't auto-start clock, let user do it
+                    }
+                } else if (draft.clockIsRunning) {
+                    draft.gameClock = Math.max(0, draft.gameClock - 1);
+                    if (draft.gameClock === 0) {
+                        draft.clockIsRunning = false;
+                        
+                        // Apply the quarter change logic directly to the draft
+                        applyActionToGameState(draft as Game, {
+                            type: 'QUARTER_CHANGE',
+                            id: `action_${Date.now()}`,
+                            timestamp: Date.now(),
+                            description: `Final del periodo ${draft.currentQuarter}.`,
+                            payload: { newQuarter: draft.currentQuarter + 1, quarter: draft.currentQuarter, gameClock: 0, homeScore: draft.homeTeam.stats.score, awayScore: draft.awayTeam.stats.score }
+                        }, false);
+                    }
+                }
+            });
+            
+        case 'GAME_END': {
+             const finalState = produce(state, draft => {
+                const endAction: GameAction = {
+                    id: `action_${Date.now()}`,
+                    type: 'GAME_END',
+                    timestamp: Date.now(),
+                    description: 'El partido ha finalizado.',
+                    payload: {
+                        quarter: draft.currentQuarter,
+                        gameClock: draft.gameClock,
+                        homeScore: draft.homeTeam.stats.score,
+                        awayScore: draft.awayTeam.stats.score,
+                    },
+                };
+                draft.gameLog.push(endAction);
+                draft.status = 'FINISHED';
+                draft.clockIsRunning = false;
+             });
+             return finalState;
+        }
+
+        case 'REOPEN_GAME': {
+            const gameToReopen: Game = action.payload as any;
+            
+            // Re-establish the full game state from payload
+            let nextState = produce(gameToReopen, draft => {
+                draft.status = 'IN_PROGRESS';
+                draft.clockIsRunning = false;
+
+                // Remove the GAME_END action from the log
+                const gameEndIndex = draft.gameLog.findIndex(a => a.type === 'GAME_END');
+                if (gameEndIndex > -1) {
+                    draft.gameLog.splice(gameEndIndex, 1);
+                }
+            });
+
+            // Recalculate to ensure everything is consistent after removing the end action
+            return recalculateGameStateFromLog(nextState, nextState.gameLog);
+        }
+        
+        case 'UNDO_LAST_ACTION': {
+             if(state.gameLog.length === 0) return state;
+             const newState = createInitialGame();
+             return produce(newState, draft => {
+                Object.assign(draft, baseGame);
+                const newLog = state.gameLog.slice(0, -1);
+                draft.gameLog = newLog;
+                const recalculatedState = recalculateGameStateFromLog(draft as Game, newLog);
+                Object.assign(draft, recalculatedState);
+             });
+        }
+        default:
+             return state;
+    }
+  }
+
+  const [game, dispatch] = useReducer(gameReducer, baseGame);
+  
   useEffect(() => {
     async function loadGame() {
         if (typeof window === 'undefined') {
@@ -542,9 +542,6 @@ export default function LiveGamePage() {
                 router.replace('/game/setup');
                 return;
             }
-
-            const storedSettings = localStorage.getItem('appSettings');
-            setAppSettings(storedSettings ? JSON.parse(storedSettings) : defaultAppSettings);
         } catch (error) {
             console.error("Failed to load live game", error);
             toast({ title: "Error al cargar", description: "No se pudo cargar el partido en curso." });
@@ -998,7 +995,7 @@ export default function LiveGamePage() {
       )
   }
 
-  if (isLoading || !appSettings) {
+  if (isLoading) {
     return <LoadingModal />;
   }
   
@@ -1218,3 +1215,6 @@ export default function LiveGamePage() {
     
 
 
+
+
+    
