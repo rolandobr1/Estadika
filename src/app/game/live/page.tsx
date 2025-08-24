@@ -392,7 +392,6 @@ const ClockSettingsModal = ({
 export default function LiveGamePage() {
   const router = useRouter();
   const { toast } = useToast();
-  const [baseGame, setBaseGame] = useState(createInitialGame());
   
   const [lastActionKey, setLastActionKey] = useState<string | null>(null);
   const [editingPlayer, setEditingPlayer] = useState<EditingPlayerInfo | null>(null);
@@ -461,7 +460,7 @@ export default function LiveGamePage() {
                               id: `action_${Date.now()}`,
                               timestamp: Date.now(),
                               description: `Final del periodo ${draft.currentQuarter}.`,
-                              payload: { newQuarter: draft.currentQuarter + 1, quarter: draft.currentQuarter, gameClock: 0, homeScore: draft.homeTeam.stats.score, awayScore: draft.awayTeam.stats.score }
+                              payload: { newQuarter: draft.currentQuarter + 1 }
                           }, false);
                       }
                   }
@@ -474,12 +473,7 @@ export default function LiveGamePage() {
                       type: 'GAME_END',
                       timestamp: Date.now(),
                       description: 'El partido ha finalizado.',
-                      payload: {
-                          quarter: draft.currentQuarter,
-                          gameClock: draft.gameClock,
-                          homeScore: draft.homeTeam.stats.score,
-                          awayScore: draft.awayTeam.stats.score,
-                      },
+                      payload: {},
                   };
                   draft.gameLog.push(endAction);
                   draft.status = 'FINISHED';
@@ -506,15 +500,16 @@ export default function LiveGamePage() {
           }
           
           case 'UNDO_LAST_ACTION': {
+              const baseGameForUndo = createInitialGame();
               if (state.gameLog.length === 0) return state;
               
               const newState = createInitialGame();
               Object.assign(newState, {
                   id: state.id,
                   date: state.date,
-                  settings: baseGame.settings,
-                  homeTeam: { ...baseGame.homeTeam },
-                  awayTeam: { ...baseGame.awayTeam },
+                  settings: state.settings,
+                  homeTeam: { ...baseGameForUndo.homeTeam, name: state.homeTeam.name, players: state.homeTeam.players },
+                  awayTeam: { ...baseGameForUndo.awayTeam, name: state.awayTeam.name, players: state.awayTeam.players },
               });
   
               return produce(newState, draft => {
@@ -529,7 +524,7 @@ export default function LiveGamePage() {
       }
     }
 
-  const [game, dispatch] = useReducer(gameReducer, baseGame);
+  const [game, dispatch] = useReducer(gameReducer, createInitialGame());
   
   useEffect(() => {
     async function loadGame() {
@@ -541,7 +536,6 @@ export default function LiveGamePage() {
         try {
             const liveGame = await getLiveGame();
             if (liveGame) {
-                setBaseGame(liveGame);
                 if (liveGame.status === 'FINISHED') { // Game was resumed from history
                     dispatch({ type: 'REOPEN_GAME', id: `action_${Date.now()}`, timestamp: Date.now(), description: 'Game re-opened from history.', payload: liveGame });
                 } else { // New game or live game
@@ -572,12 +566,7 @@ export default function LiveGamePage() {
                 id: `action_${Date.now()}`,
                 timestamp: Date.now(),
                 description: 'Clock tick',
-                payload: {
-                    quarter: game.currentQuarter,
-                    gameClock: game.gameClock,
-                    homeScore: game.homeTeam.stats.score,
-                    awayScore: game.awayTeam.stats.score,
-                }
+                payload: {}
             });
         }, 1000);
     }
@@ -587,7 +576,7 @@ export default function LiveGamePage() {
         clearInterval(interval);
       }
     };
-  }, [game.clockIsRunning, game.isTimeoutActive, game.currentQuarter, game.gameClock, game.homeTeam.stats.score, game.awayTeam.stats.score]);
+  }, [game.clockIsRunning, game.isTimeoutActive]);
 
   // Persist to localStorage for spectator view
   useEffect(() => {
@@ -630,12 +619,7 @@ export default function LiveGamePage() {
             type: 'GAME_END',
             timestamp: Date.now(),
             description: 'El partido ha finalizado.',
-            payload: {
-                quarter: draft.currentQuarter,
-                gameClock: draft.gameClock,
-                homeScore: draft.homeTeam.stats.score,
-                awayScore: draft.awayTeam.stats.score,
-            },
+            payload: {},
         };
         draft.gameLog.push(endAction);
     });
@@ -700,10 +684,6 @@ export default function LiveGamePage() {
           timestamp: Date.now(),
           description,
           payload: {
-              quarter: game.currentQuarter,
-              gameClock: game.gameClock,
-              homeScore: game.homeTeam.stats.score,
-              awayScore: game.awayTeam.stats.score,
               ...payload,
           },
       };
@@ -852,12 +832,7 @@ export default function LiveGamePage() {
 
   const handleUndo = () => {
     if (game.gameLog.length > 0) {
-        dispatch({ type: 'UNDO_LAST_ACTION', id: `action_${Date.now()}`, timestamp: Date.now(), description: 'Undo last action', payload: {
-            quarter: game.currentQuarter,
-            gameClock: game.gameClock,
-            homeScore: game.homeTeam.stats.score,
-            awayScore: game.awayTeam.stats.score,
-        } });
+        dispatch({ type: 'UNDO_LAST_ACTION', id: `action_${Date.now()}`, timestamp: Date.now(), description: 'Undo last action', payload: {} });
         toast({
             title: "Acción deshecha",
             description: "Se ha revertido la última acción del partido."
@@ -925,11 +900,11 @@ export default function LiveGamePage() {
   };
   
     const formatActionTime = (action: GameAction) => {
-        const payload = ('payload' in action && typeof action.payload === 'object' && action.payload !== null) ? action.payload : {};
-        const quarter = 'quarter' in payload ? payload.quarter : game.currentQuarter;
-        const gameClock = 'gameClock' in payload ? payload.gameClock : 0;
-        const homeScore = 'homeScore' in payload ? payload.homeScore : 0;
-        const awayScore = 'awayScore' in payload ? payload.awayScore : 0;
+        const payload = ('payload' in action && typeof action.payload === 'object' && action.payload !== null && !('homeTeam' in action.payload)) ? action.payload : {};
+        const quarter = payload.quarter ?? game.currentQuarter;
+        const gameClock = payload.gameClock ?? 0;
+        const homeScore = payload.homeScore ?? 0;
+        const awayScore = payload.awayScore ?? 0;
     
         const mins = Math.floor(gameClock / 60).toString().padStart(2, '0');
         const secs = (gameClock % 60).toString().padStart(2, '0');
@@ -948,23 +923,23 @@ export default function LiveGamePage() {
     const csvRows = [headers.join(',')];
 
     for (const action of game.gameLog) {
-        const payload = 'payload' in action ? action.payload : {};
+        const payload = ('payload' in action && typeof action.payload === 'object' && action.payload !== null && !('homeTeam' in action.payload)) ? action.payload : {};
         const row = [
             action.id,
             action.timestamp,
             action.type,
             `"${action.description.replace(/"/g, '""')}"`,
-            'quarter' in payload ? payload.quarter : '',
-            'gameClock' in payload ? payload.gameClock : '',
-            'homeScore' in payload ? payload.homeScore : '',
-            'awayScore' in payload ? payload.awayScore : '',
-            'teamId' in payload ? payload.teamId : '',
-            'playerId' in payload ? payload.playerId : '',
-            'statType' in payload ? payload.statType : '',
-            'pointsScored' in payload ? payload.pointsScored : 0,
-            'playerInId' in payload ? payload.playerInId : '',
-            'playerOutId' in payload ? payload.playerOutId : '',
-            'timerState' in payload ? payload.timerState : ''
+            payload.quarter ?? '',
+            payload.gameClock ?? '',
+            payload.homeScore ?? '',
+            payload.awayScore ?? '',
+            payload.teamId ?? '',
+            payload.playerId ?? '',
+            payload.statType ?? '',
+            payload.pointsScored ?? 0,
+            payload.playerInId ?? '',
+            payload.playerOutId ?? '',
+            payload.timerState ?? ''
         ];
         csvRows.push(row.join(','));
     }
@@ -986,6 +961,10 @@ export default function LiveGamePage() {
   }
 
   const PlayByPlayContent = () => {
+      // Find the last action before the undo to get the correct context for formatting time.
+      const lastRelevantActionIndex = [...game.gameLog].reverse().findIndex(a => a.type !== 'UNDO_LAST_ACTION');
+      const gameContextForTime = lastRelevantActionIndex > -1 ? game.gameLog[game.gameLog.length - 1 - lastRelevantActionIndex] : null;
+
       return (
           <Card>
               <CardContent className="pt-6">
