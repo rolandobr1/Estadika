@@ -500,7 +500,6 @@ export default function LiveGamePage() {
           }
           
           case 'UNDO_LAST_ACTION': {
-              const baseGameForUndo = createInitialGame();
               if (state.gameLog.length === 0) return state;
               
               const newState = createInitialGame();
@@ -508,8 +507,8 @@ export default function LiveGamePage() {
                   id: state.id,
                   date: state.date,
                   settings: state.settings,
-                  homeTeam: { ...baseGameForUndo.homeTeam, name: state.homeTeam.name, players: state.homeTeam.players },
-                  awayTeam: { ...baseGameForUndo.awayTeam, name: state.awayTeam.name, players: state.awayTeam.players },
+                  homeTeam: { ...createInitialGame().homeTeam, name: state.homeTeam.name, players: state.homeTeam.players },
+                  awayTeam: { ...createInitialGame().awayTeam, name: state.awayTeam.name, players: state.awayTeam.players },
               });
   
               return produce(newState, draft => {
@@ -1203,3 +1202,5 @@ export default function LiveGamePage() {
     </>
   );
 }
+
+    
