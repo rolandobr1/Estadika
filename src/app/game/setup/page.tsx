@@ -200,22 +200,20 @@ export default function GameSetupPage() {
                 const liveGame = await getLiveGame();
                 if (liveGame) {
                     setGameInProgress(true);
-                    setIsLoading(false); // Stop loading if we find a game
-                    return;
-                }
-                setGameInProgress(false);
+                } else {
+                    setGameInProgress(false);
+                    const [playersFromDb, teamsFromDb] = await Promise.all([getPlayers(), getTeams()]);
+                    setRoster(playersFromDb);
+                    setTeams(teamsFromDb);
 
-                const [playersFromDb, teamsFromDb] = await Promise.all([getPlayers(), getTeams()]);
-                setRoster(playersFromDb);
-                setTeams(teamsFromDb);
-
-                const storedSettings = localStorage.getItem('appSettings');
-                if (storedSettings) {
-                    const parsedSettings: AppSettings = JSON.parse(storedSettings);
-                    setGameSettings(prev => ({
-                        ...prev,
-                        ...(parsedSettings.gameSettings || {})
-                    }));
+                    const storedSettings = localStorage.getItem('appSettings');
+                    if (storedSettings) {
+                        const parsedSettings: AppSettings = JSON.parse(storedSettings);
+                        setGameSettings(prev => ({
+                            ...prev,
+                            ...(parsedSettings.gameSettings || {})
+                        }));
+                    }
                 }
             } catch (e) {
                 console.error("Could not load data", e);
@@ -232,6 +230,12 @@ export default function GameSetupPage() {
         loadData();
     }, [toast]);
     
+     useEffect(() => {
+        if (gameInProgress === true) {
+            router.push('/game/live');
+        }
+    }, [gameInProgress, router]);
+
     const handleLoadTeam = (team: Team, teamType: 'home' | 'away') => {
         const teamPlayers = roster.filter(p => team.playerIds.includes(p.id));
 
@@ -444,21 +448,7 @@ export default function GameSetupPage() {
     }
 
     if (gameInProgress) {
-        return (
-             <AlertDialog open={true} onOpenChange={() => router.push('/game/live')}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle className="flex items-center gap-2"><AlertTriangle className="text-yellow-500" /> Juego en Curso Detectado</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Hay un partido activo. No puedes crear uno nuevo hasta que finalices el actual. Serás redirigido al partido en curso.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogAction onClick={() => router.push('/game/live')}>Ir al Partido</AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-        );
+        return <LoadingModal text="Redirigiendo al partido en curso..." />;
     }
     
     return (
@@ -640,3 +630,5 @@ export default function GameSetupPage() {
         </>
     );
 }
+
+    
