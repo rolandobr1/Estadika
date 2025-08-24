@@ -63,14 +63,13 @@ export interface GameAction {
   type: ActionType;
   description: string;
   payload: {
+    // For most actions, these are present
+    quarter?: number;
+    gameClock?: number;
+    homeScore?: number;
+    awayScore?: number;
     teamId?: 'homeTeam' | 'awayTeam';
     playerId?: string;
-    // Common context
-    quarter: number;
-    gameClock: number;
-    homeScore: number;
-    awayScore: number;
-    // Specific payloads
     statType?: StatType;
     pointsScored?: number;
     manualAdjustment?: 1 | -1;
@@ -80,12 +79,10 @@ export interface GameAction {
     timeAdjustment?: number;
     newTime?: number;
     newQuarter?: number;
-    tournamentId?: string;
-    matchId?: string;
-    previousScores?: { home: number, away: number }; // For handling resumed game stat updates
-    [key: string]: any; // Allow for other properties
-  };
+    // For GAME_START and REOPEN_GAME, the payload can be the full game object
+  } | Game;
 }
+
 
 export type TimeoutMode = 'per_quarter' | 'per_half' | 'total' | 'per_quarter_custom';
 

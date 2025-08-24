@@ -5,7 +5,7 @@ import { useReducer, useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { ChevronLeft, ChevronRight, Pause, Play, Redo, SkipForward, Plus, Minus, Save, ArrowRightLeft, ShieldAlert, Undo, Clock, ListCollapse, BarChartHorizontal, Download, Timer, Settings, Share2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Pause, Play, Redo, SkipForward, Plus, Minus, Save, ArrowRightLeft, ShieldAlert, Undo, Clock, ListCollapse, BarChartHorizontal, Download, Timer, Settings } from 'lucide-react';
 import { PiUserSwitchBold } from "react-icons/pi";
 import { IoStatsChart } from "react-icons/io5";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -409,27 +409,35 @@ export default function LiveGamePage() {
         return state;
     }
     
+    // Type guard to check if payload is a full Game object
+    const isFullGamePayload = (payload: any): payload is Game => {
+        return payload && typeof payload === 'object' && 'id' in payload && 'homeTeam' in payload;
+    };
+
     const incrementalActions: ActionType[] = [
         'SCORE_UPDATE', 'STAT_UPDATE', 'TIMEOUT', 'SUBSTITUTION', 'ADD_PLAYER_TO_COURT',
         'QUARTER_CHANGE', 'MANUAL_TIMER_ADJUST', 'SET_TIMER'
     ];
 
-    if (incrementalActions.includes(action.type)) {
+    if ('payload' in action && !isFullGamePayload(action.payload) && incrementalActions.includes(action.type)) {
         return applyActionToGameState(state, action);
     }
 
     // For other actions, handle them with the existing logic
     switch (action.type) {
         case 'GAME_START':
-            return produce(state, draft => {
-                Object.assign(draft, action.payload);
-            });
+            if (isFullGamePayload(action.payload)) {
+                return produce(state, draft => {
+                    Object.assign(draft, action.payload);
+                });
+            }
+            return state;
         
         case 'TIMER_CHANGE':
             return produce(state, draft => {
-                 if (action.payload.timerState === 'PLAY') draft.clockIsRunning = true;
-                 if (action.payload.timerState === 'PAUSE') draft.clockIsRunning = false;
-                 if (action.payload.timerState === 'RESET') {
+                 if ('timerState' in action.payload && action.payload.timerState === 'PLAY') draft.clockIsRunning = true;
+                 if ('timerState' in action.payload && action.payload.timerState === 'PAUSE') draft.clockIsRunning = false;
+                 if ('timerState' in action.payload && action.payload.timerState === 'RESET') {
                     draft.clockIsRunning = false;
                     const newClockValue = draft.currentQuarter > draft.settings.quarters
                         ? draft.settings.overtimeLength
@@ -486,7 +494,8 @@ export default function LiveGamePage() {
         }
 
         case 'REOPEN_GAME': {
-            const gameToReopen: Game = action.payload as any;
+            if (!isFullGamePayload(action.payload)) return state;
+            const gameToReopen: Game = action.payload;
             
             // Re-establish the full game state from payload
             let nextState = produce(gameToReopen, draft => {
@@ -505,15 +514,24 @@ export default function LiveGamePage() {
         }
         
         case 'UNDO_LAST_ACTION': {
-             if(state.gameLog.length === 0) return state;
-             const newState = createInitialGame();
-             return produce(newState, draft => {
-                Object.assign(draft, baseGame);
+            if (state.gameLog.length === 0) return state;
+            
+            // Recalculate from a clean slate using baseGame as the source of truth for settings/rosters
+            const newState = createInitialGame();
+            Object.assign(newState, {
+                id: state.id,
+                date: state.date,
+                settings: baseGame.settings,
+                homeTeam: { ...baseGame.homeTeam },
+                awayTeam: { ...baseGame.awayTeam },
+            });
+
+            return produce(newState, draft => {
                 const newLog = state.gameLog.slice(0, -1);
-                draft.gameLog = newLog;
                 const recalculatedState = recalculateGameStateFromLog(draft as Game, newLog);
                 Object.assign(draft, recalculatedState);
-             });
+                draft.gameLog = newLog;
+            });
         }
         default:
              return state;
@@ -916,9 +934,11 @@ export default function LiveGamePage() {
   };
   
     const formatActionTime = (action: GameAction) => {
-      const mins = Math.floor(action.payload.gameClock / 60).toString().padStart(2, '0');
-      const secs = (action.payload.gameClock % 60).toString().padStart(2, '0');
-      return `P${action.payload.quarter} ${mins}:${secs} (${action.payload.homeScore} - ${action.payload.awayScore})`;
+      const payload = 'payload' in action ? action.payload : {};
+      if (!('quarter' in payload) || !('gameClock' in payload)) return '';
+      const mins = Math.floor(payload.gameClock / 60).toString().padStart(2, '0');
+      const secs = (payload.gameClock % 60).toString().padStart(2, '0');
+      return `P${payload.quarter} ${mins}:${secs} (${payload.homeScore} - ${payload.awayScore})`;
   }
 
   const handleExportPlayByPlay = () => {
@@ -933,22 +953,23 @@ export default function LiveGamePage() {
     const csvRows = [headers.join(',')];
 
     for (const action of game.gameLog) {
+        const payload = 'payload' in action ? action.payload : {};
         const row = [
             action.id,
             action.timestamp,
             action.type,
             `"${action.description.replace(/"/g, '""')}"`,
-            action.payload.quarter,
-            action.payload.gameClock,
-            action.payload.homeScore,
-            action.payload.awayScore,
-            action.payload.teamId || '',
-            action.payload.playerId || '',
-            action.payload.statType || '',
-            action.payload.pointsScored || 0,
-            action.payload.playerInId || '',
-            action.payload.playerOutId || '',
-            action.payload.timerState || ''
+            'quarter' in payload ? payload.quarter : '',
+            'gameClock' in payload ? payload.gameClock : '',
+            'homeScore' in payload ? payload.homeScore : '',
+            'awayScore' in payload ? payload.awayScore : '',
+            'teamId' in payload ? payload.teamId : '',
+            'playerId' in payload ? payload.playerId : '',
+            'statType' in payload ? payload.statType : '',
+            'pointsScored' in payload ? payload.pointsScored : 0,
+            'playerInId' in payload ? payload.playerInId : '',
+            'playerOutId' in payload ? payload.playerOutId : '',
+            'timerState' in payload ? payload.timerState : ''
         ];
         csvRows.push(row.join(','));
     }
@@ -1208,13 +1229,3 @@ export default function LiveGamePage() {
     </>
   );
 }
-    
-
-
-
-    
-
-
-
-
-    
