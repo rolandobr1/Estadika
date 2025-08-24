@@ -21,12 +21,14 @@ import { getFinishedGames, deleteFinishedGames, importGames, saveLiveGame, getLi
 const ScoreboardByQuarter = ({ game }: { game: Game }) => {
     const calculateQuarterScores = () => {
         const quarterScores: { home: number[], away: number[] } = { home: [], away: [] };
-        let lastHomeScore = 0;
-        let lastAwayScore = 0;
         const numPeriods = Math.max(game.settings.quarters, game.currentQuarter);
 
         for (let q = 1; q <= numPeriods; q++) {
-            const actionsInQuarter = game.gameLog.filter(action => action.payload.quarter === q);
+            const actionsInQuarter = game.gameLog.filter(action => {
+                const payload = action.payload;
+                // Type guard to ensure payload is not a full Game object and has the quarter property
+                return typeof payload === 'object' && payload !== null && !('homeTeam' in payload) && 'quarter' in payload && payload.quarter === q;
+            });
             
             let homeScoreInQuarter = 0;
             let awayScoreInQuarter = 0;
@@ -34,10 +36,13 @@ const ScoreboardByQuarter = ({ game }: { game: Game }) => {
             if (actionsInQuarter.length > 0) {
                  const scoreUpdates = actionsInQuarter.filter(a => a.type === 'SCORE_UPDATE');
                  scoreUpdates.forEach(action => {
-                     if (action.payload.teamId === 'homeTeam') {
-                         homeScoreInQuarter += action.payload.pointsScored || 0;
-                     } else {
-                         awayScoreInQuarter += action.payload.pointsScored || 0;
+                     const payload = action.payload;
+                     if (typeof payload === 'object' && payload !== null && !('homeTeam' in payload)) {
+                         if (payload.teamId === 'homeTeam') {
+                             homeScoreInQuarter += payload.pointsScored || 0;
+                         } else {
+                             awayScoreInQuarter += payload.pointsScored || 0;
+                         }
                      }
                  });
             }
@@ -625,3 +630,5 @@ export default function HistoryPage() {
         </Suspense>
     )
 }
+
+    
