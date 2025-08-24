@@ -79,8 +79,9 @@ export interface GameAction {
     timeAdjustment?: number;
     newTime?: number;
     newQuarter?: number;
-    // For GAME_START and REOPEN_GAME, the payload can be the full game object
-  } | Game;
+    // For GAME_START and REOPEN_GAME, the payload is the full game object
+    gameData?: Game;
+  };
 }
 
 

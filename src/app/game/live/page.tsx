@@ -407,33 +407,32 @@ export default function LiveGamePage() {
           return state;
       }
       
-      const isFullGamePayload = (payload: any): payload is Game => {
-          return payload && typeof payload === 'object' && 'id' in payload && 'homeTeam' in payload;
+      const isIncrementalAction = (payload: any): payload is GameAction['payload'] => {
+          const incrementalActions: ActionType[] = [
+              'SCORE_UPDATE', 'STAT_UPDATE', 'TIMEOUT', 'SUBSTITUTION', 'ADD_PLAYER_TO_COURT',
+              'QUARTER_CHANGE', 'MANUAL_TIMER_ADJUST', 'SET_TIMER'
+          ];
+          return payload && typeof payload === 'object' && !payload.gameData && incrementalActions.includes(action.type);
       };
   
-      const incrementalActions: ActionType[] = [
-          'SCORE_UPDATE', 'STAT_UPDATE', 'TIMEOUT', 'SUBSTITUTION', 'ADD_PLAYER_TO_COURT',
-          'QUARTER_CHANGE', 'MANUAL_TIMER_ADJUST', 'SET_TIMER'
-      ];
-  
-      if ('payload' in action && !isFullGamePayload(action.payload) && incrementalActions.includes(action.type)) {
+      if (isIncrementalAction(action.payload)) {
           return applyActionToGameState(state, action);
       }
   
       switch (action.type) {
           case 'GAME_START':
-              if (isFullGamePayload(action.payload)) {
+              if (action.payload.gameData) {
                   return produce(state, draft => {
-                      Object.assign(draft, action.payload);
+                      Object.assign(draft, action.payload.gameData);
                   });
               }
               return state;
           
           case 'TIMER_CHANGE':
               return produce(state, draft => {
-                   if ('timerState' in action.payload && action.payload.timerState === 'PLAY') draft.clockIsRunning = true;
-                   if ('timerState' in action.payload && action.payload.timerState === 'PAUSE') draft.clockIsRunning = false;
-                   if ('timerState' in action.payload && action.payload.timerState === 'RESET') {
+                   if (action.payload.timerState === 'PLAY') draft.clockIsRunning = true;
+                   if (action.payload.timerState === 'PAUSE') draft.clockIsRunning = false;
+                   if (action.payload.timerState === 'RESET') {
                       draft.clockIsRunning = false;
                       const newClockValue = draft.currentQuarter > draft.settings.quarters
                           ? draft.settings.overtimeLength
@@ -483,8 +482,8 @@ export default function LiveGamePage() {
           }
   
           case 'REOPEN_GAME': {
-              if (!isFullGamePayload(action.payload)) return state;
-              const gameToReopen: Game = action.payload;
+              const gameToReopen = action.payload.gameData;
+              if (!gameToReopen) return state;
               
               let nextState = produce(gameToReopen, draft => {
                   draft.status = 'IN_PROGRESS';
@@ -536,9 +535,9 @@ export default function LiveGamePage() {
             const liveGame = await getLiveGame();
             if (liveGame) {
                 if (liveGame.status === 'FINISHED') { // Game was resumed from history
-                    dispatch({ type: 'REOPEN_GAME', id: `action_${Date.now()}`, timestamp: Date.now(), description: 'Game re-opened from history.', payload: liveGame });
+                    dispatch({ type: 'REOPEN_GAME', id: `action_${Date.now()}`, timestamp: Date.now(), description: 'Game re-opened from history.', payload: { gameData: liveGame } });
                 } else { // New game or live game
-                    dispatch({ type: 'GAME_START', id: `action_${Date.now()}`, timestamp: Date.now(), description: 'Game loaded from storage.', payload: liveGame });
+                    dispatch({ type: 'GAME_START', id: `action_${Date.now()}`, timestamp: Date.now(), description: 'Game loaded from storage.', payload: { gameData: liveGame } });
                 }
             } else {
                 router.replace('/game/setup');
@@ -899,7 +898,7 @@ export default function LiveGamePage() {
   };
   
     const formatActionTime = (action: GameAction) => {
-        const payload = ('payload' in action && typeof action.payload === 'object' && action.payload !== null && !('homeTeam' in action.payload)) ? action.payload : {};
+        const { payload } = action;
         const quarter = payload.quarter ?? game.currentQuarter;
         const gameClock = payload.gameClock ?? 0;
         const homeScore = payload.homeScore ?? 0;
@@ -922,7 +921,7 @@ export default function LiveGamePage() {
     const csvRows = [headers.join(',')];
 
     for (const action of game.gameLog) {
-        const payload = ('payload' in action && typeof action.payload === 'object' && action.payload !== null && !('homeTeam' in action.payload)) ? action.payload : {};
+        const { payload } = action;
         const row = [
             action.id,
             action.timestamp,
@@ -1202,5 +1201,3 @@ export default function LiveGamePage() {
     </>
   );
 }
-
-    

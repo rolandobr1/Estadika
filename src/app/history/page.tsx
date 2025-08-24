@@ -25,9 +25,8 @@ const ScoreboardByQuarter = ({ game }: { game: Game }) => {
 
         for (let q = 1; q <= numPeriods; q++) {
             const actionsInQuarter = game.gameLog.filter(action => {
-                const payload = action.payload;
-                // Type guard to ensure payload is not a full Game object and has the quarter property
-                return typeof payload === 'object' && payload !== null && !('homeTeam' in payload) && 'quarter' in payload && payload.quarter === q;
+                const { payload } = action;
+                return payload && typeof payload === 'object' && !payload.gameData && payload.quarter === q;
             });
             
             let homeScoreInQuarter = 0;
@@ -36,8 +35,8 @@ const ScoreboardByQuarter = ({ game }: { game: Game }) => {
             if (actionsInQuarter.length > 0) {
                  const scoreUpdates = actionsInQuarter.filter(a => a.type === 'SCORE_UPDATE');
                  scoreUpdates.forEach(action => {
-                     const payload = action.payload;
-                     if (typeof payload === 'object' && payload !== null && !('homeTeam' in payload)) {
+                     const { payload } = action;
+                     if (payload && typeof payload === 'object' && !payload.gameData) {
                          if (payload.teamId === 'homeTeam') {
                              homeScoreInQuarter += payload.pointsScored || 0;
                          } else {
