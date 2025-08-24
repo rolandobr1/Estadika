@@ -10,7 +10,7 @@ import { ThemeProvider } from '@/components/theme-provider';
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
 export const metadata: Metadata = {
-  title: 'Estadika',
+  title: 'CourtVision Stats',
   description: 'Tu asistente de baloncesto todo en uno para seguimiento de estadísticas, gestión de plantillas y torneos.',
 };
 

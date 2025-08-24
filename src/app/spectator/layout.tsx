@@ -9,7 +9,7 @@ import { ThemeProvider } from '@/components/theme-provider';
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
 export const metadata: Metadata = {
-  title: 'Estadika - Espectador',
+  title: 'CourtVision Stats - Espectador',
   description: 'Marcador en vivo del partido.',
 };
 

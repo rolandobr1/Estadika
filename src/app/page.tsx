@@ -31,7 +31,13 @@ export default function Home() {
     };
   }, []);
 
-  const menuActions = [
+  const menuActions: {
+      title: string;
+      href: string;
+      icon: ElementType<{ className?: string }>;
+      description: string;
+      variant: 'default' | 'accent';
+  }[] = [
     {
       title: activeGame ? 'Volver al Partido' : 'Iniciar Partido',
       href: activeGame ? '/game/live' : '/game/setup',
@@ -44,21 +50,21 @@ export default function Home() {
       href: '/roster',
       icon: Users,
       description: 'Añade y edita tus jugadores y equipos.',
-      variant: 'default' as const,
+      variant: 'default',
     },
     {
       title: 'Modo Torneo',
       href: '/tournaments',
       icon: Trophy,
       description: 'Crea y administra tus competiciones.',
-      variant: 'default' as const,
+      variant: 'default',
     },
     {
       title: 'Historial',
       href: '/history',
       icon: BarChart3,
       description: 'Revisa estadísticas de juegos pasados.',
-      variant: 'default' as const,
+      variant: 'default',
     },
   ];
 
@@ -69,7 +75,7 @@ export default function Home() {
             <div className="relative mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/70 shadow-md">
                 <RiBasketballLine className="h-8 w-8 text-primary-foreground"/>
             </div>
-            <h1 className="text-3xl font-bold tracking-tight text-card-foreground">Estadika</h1>
+            <h1 className="text-3xl font-bold tracking-tight text-card-foreground">CourtVision Stats</h1>
             <p className="mt-2 text-base text-muted-foreground">Tu asistente de baloncesto todo en uno.</p>
           </div>
 
@@ -97,7 +103,7 @@ export default function Home() {
         </div>
 
         <footer className="absolute bottom-6 text-sm text-foreground/60">
-          © {new Date().getFullYear()} Estadika
+          © {new Date().getFullYear()} CourtVision Stats
         </footer>
       </main>
   );

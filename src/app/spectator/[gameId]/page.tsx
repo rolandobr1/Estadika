@@ -124,7 +124,7 @@ export default function SpectatorPage() {
         <main className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-4">
              <div className="absolute top-6 left-6 flex items-center gap-2">
                 <RiBasketballLine className="h-6 w-6 text-primary" />
-                <span className="font-bold text-lg">Estadika - Modo Espectador</span>
+                <span className="font-bold text-lg">CourtVision Stats - Modo Espectador</span>
             </div>
             <Card className="w-full max-w-4xl border-2 shadow-xl">
                  <CardContent className="p-6 md:p-10">
