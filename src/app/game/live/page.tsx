@@ -5,7 +5,7 @@ import { useReducer, useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { ChevronLeft, ChevronRight, Pause, Play, Redo, SkipForward, Plus, Minus, Save, ArrowRightLeft, ShieldAlert, Undo, Clock, ListCollapse, BarChartHorizontal, Download, Timer, Settings, Share2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Pause, Play, Redo, SkipForward, Plus, Minus, Save, ArrowRightLeft, ShieldAlert, Undo, Clock, ListCollapse, BarChartHorizontal, Download, Timer, Settings } from 'lucide-react';
 import { PiUserSwitchBold } from "react-icons/pi";
 import { IoStatsChart } from "react-icons/io5";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -859,15 +859,6 @@ export default function LiveGamePage() {
     }
   }
 
-  const handleShare = () => {
-    const spectatorUrl = `${window.location.origin}/spectator/${game.id}`;
-    navigator.clipboard.writeText(spectatorUrl);
-    toast({
-      title: "Enlace Copiado",
-      description: "El enlace del modo espectador ha sido copiado al portapapeles.",
-    });
-  };
-
   const TeamPanel = ({ team, teamId, title }: { team: TeamInGame, teamId: 'homeTeam' | 'awayTeam', title: string }) => {
     if (!team || !team.players) return null;
     
@@ -1140,9 +1131,6 @@ export default function LiveGamePage() {
       </div>
 
       <div className="flex flex-col sm:flex-row justify-center items-center gap-4 my-6">
-        <Button variant="outline" size="sm" onClick={handleShare} className="h-9 w-full sm:w-auto">
-            <Share2 className="mr-2 h-4 w-4" /> Compartir
-        </Button>
         <Button variant="outline" size="sm" onClick={handleUndo} disabled={game.gameLog.length === 0} className="h-9 w-full sm:w-auto">
             <Undo className="mr-2 h-4 w-4" /> Deshacer última acción
         </Button>
@@ -1228,4 +1216,5 @@ export default function LiveGamePage() {
 
 
     
+
 
