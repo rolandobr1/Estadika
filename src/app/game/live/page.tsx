@@ -403,140 +403,131 @@ export default function LiveGamePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isFinishingGame, setIsFinishingGame] = useState(false);
 
-  // Reducer to manage game state by processing actions and updating the log
   const gameReducer = (state: Game, action: GameAction): Game => {
-    if (state.status === 'FINISHED' && !['GAME_END', 'GAME_START', 'REOPEN_GAME'].includes(action.type)) {
-        return state;
+      if (state.status === 'FINISHED' && !['GAME_END', 'GAME_START', 'REOPEN_GAME'].includes(action.type)) {
+          return state;
+      }
+      
+      const isFullGamePayload = (payload: any): payload is Game => {
+          return payload && typeof payload === 'object' && 'id' in payload && 'homeTeam' in payload;
+      };
+  
+      const incrementalActions: ActionType[] = [
+          'SCORE_UPDATE', 'STAT_UPDATE', 'TIMEOUT', 'SUBSTITUTION', 'ADD_PLAYER_TO_COURT',
+          'QUARTER_CHANGE', 'MANUAL_TIMER_ADJUST', 'SET_TIMER'
+      ];
+  
+      if ('payload' in action && !isFullGamePayload(action.payload) && incrementalActions.includes(action.type)) {
+          return applyActionToGameState(state, action);
+      }
+  
+      switch (action.type) {
+          case 'GAME_START':
+              if (isFullGamePayload(action.payload)) {
+                  return produce(state, draft => {
+                      Object.assign(draft, action.payload);
+                  });
+              }
+              return state;
+          
+          case 'TIMER_CHANGE':
+              return produce(state, draft => {
+                   if ('timerState' in action.payload && action.payload.timerState === 'PLAY') draft.clockIsRunning = true;
+                   if ('timerState' in action.payload && action.payload.timerState === 'PAUSE') draft.clockIsRunning = false;
+                   if ('timerState' in action.payload && action.payload.timerState === 'RESET') {
+                      draft.clockIsRunning = false;
+                      const newClockValue = draft.currentQuarter > draft.settings.quarters
+                          ? draft.settings.overtimeLength
+                          : draft.settings.quarterLength;
+                      draft.gameClock = newClockValue;
+                   }
+              });
+          
+          case 'TICK':
+              return produce(state, draft => {
+                  if (draft.isTimeoutActive) {
+                      draft.timeoutClock = Math.max(0, draft.timeoutClock - 1);
+                      if (draft.timeoutClock === 0) {
+                          draft.isTimeoutActive = false;
+                          draft.timeoutCaller = undefined;
+                      }
+                  } else if (draft.clockIsRunning) {
+                      draft.gameClock = Math.max(0, draft.gameClock - 1);
+                      if (draft.gameClock === 0) {
+                          draft.clockIsRunning = false;
+                          
+                          applyActionToGameState(draft as Game, {
+                              type: 'QUARTER_CHANGE',
+                              id: `action_${Date.now()}`,
+                              timestamp: Date.now(),
+                              description: `Final del periodo ${draft.currentQuarter}.`,
+                              payload: { newQuarter: draft.currentQuarter + 1, quarter: draft.currentQuarter, gameClock: 0, homeScore: draft.homeTeam.stats.score, awayScore: draft.awayTeam.stats.score }
+                          }, false);
+                      }
+                  }
+              });
+              
+          case 'GAME_END': {
+               const finalState = produce(state, draft => {
+                  const endAction: GameAction = {
+                      id: `action_${Date.now()}`,
+                      type: 'GAME_END',
+                      timestamp: Date.now(),
+                      description: 'El partido ha finalizado.',
+                      payload: {
+                          quarter: draft.currentQuarter,
+                          gameClock: draft.gameClock,
+                          homeScore: draft.homeTeam.stats.score,
+                          awayScore: draft.awayTeam.stats.score,
+                      },
+                  };
+                  draft.gameLog.push(endAction);
+                  draft.status = 'FINISHED';
+                  draft.clockIsRunning = false;
+               });
+               return finalState;
+          }
+  
+          case 'REOPEN_GAME': {
+              if (!isFullGamePayload(action.payload)) return state;
+              const gameToReopen: Game = action.payload;
+              
+              let nextState = produce(gameToReopen, draft => {
+                  draft.status = 'IN_PROGRESS';
+                  draft.clockIsRunning = false;
+  
+                  const gameEndIndex = draft.gameLog.findIndex(a => a.type === 'GAME_END');
+                  if (gameEndIndex > -1) {
+                      draft.gameLog.splice(gameEndIndex, 1);
+                  }
+              });
+  
+              return recalculateGameStateFromLog(nextState, nextState.gameLog);
+          }
+          
+          case 'UNDO_LAST_ACTION': {
+              if (state.gameLog.length === 0) return state;
+              
+              const newState = createInitialGame();
+              Object.assign(newState, {
+                  id: state.id,
+                  date: state.date,
+                  settings: baseGame.settings,
+                  homeTeam: { ...baseGame.homeTeam },
+                  awayTeam: { ...baseGame.awayTeam },
+              });
+  
+              return produce(newState, draft => {
+                  const newLog = state.gameLog.slice(0, -1);
+                  const recalculatedState = recalculateGameStateFromLog(draft as Game, newLog);
+                  Object.assign(draft, recalculatedState);
+                  draft.gameLog = newLog;
+              });
+          }
+          default:
+               return state;
+      }
     }
-    
-    // Type guard to check if payload is a full Game object
-    const isFullGamePayload = (payload: any): payload is Game => {
-        return payload && typeof payload === 'object' && 'id' in payload && 'homeTeam' in payload;
-    };
-
-    const incrementalActions: ActionType[] = [
-        'SCORE_UPDATE', 'STAT_UPDATE', 'TIMEOUT', 'SUBSTITUTION', 'ADD_PLAYER_TO_COURT',
-        'QUARTER_CHANGE', 'MANUAL_TIMER_ADJUST', 'SET_TIMER'
-    ];
-
-    if ('payload' in action && !isFullGamePayload(action.payload) && incrementalActions.includes(action.type)) {
-        return applyActionToGameState(state, action);
-    }
-
-    // For other actions, handle them with the existing logic
-    switch (action.type) {
-        case 'GAME_START':
-            if (isFullGamePayload(action.payload)) {
-                return produce(state, draft => {
-                    Object.assign(draft, action.payload);
-                });
-            }
-            return state;
-        
-        case 'TIMER_CHANGE':
-            return produce(state, draft => {
-                 if ('timerState' in action.payload && action.payload.timerState === 'PLAY') draft.clockIsRunning = true;
-                 if ('timerState' in action.payload && action.payload.timerState === 'PAUSE') draft.clockIsRunning = false;
-                 if ('timerState' in action.payload && action.payload.timerState === 'RESET') {
-                    draft.clockIsRunning = false;
-                    const newClockValue = draft.currentQuarter > draft.settings.quarters
-                        ? draft.settings.overtimeLength
-                        : draft.settings.quarterLength;
-                    draft.gameClock = newClockValue;
-                 }
-            });
-        
-        case 'TICK':
-            return produce(state, draft => {
-                if (draft.isTimeoutActive) {
-                    draft.timeoutClock = Math.max(0, draft.timeoutClock - 1);
-                    if (draft.timeoutClock === 0) {
-                        draft.isTimeoutActive = false;
-                        draft.timeoutCaller = undefined;
-                        // Don't auto-start clock, let user do it
-                    }
-                } else if (draft.clockIsRunning) {
-                    draft.gameClock = Math.max(0, draft.gameClock - 1);
-                    if (draft.gameClock === 0) {
-                        draft.clockIsRunning = false;
-                        
-                        // Apply the quarter change logic directly to the draft
-                        applyActionToGameState(draft as Game, {
-                            type: 'QUARTER_CHANGE',
-                            id: `action_${Date.now()}`,
-                            timestamp: Date.now(),
-                            description: `Final del periodo ${draft.currentQuarter}.`,
-                            payload: { newQuarter: draft.currentQuarter + 1, quarter: draft.currentQuarter, gameClock: 0, homeScore: draft.homeTeam.stats.score, awayScore: draft.awayTeam.stats.score }
-                        }, false);
-                    }
-                }
-            });
-            
-        case 'GAME_END': {
-             const finalState = produce(state, draft => {
-                const endAction: GameAction = {
-                    id: `action_${Date.now()}`,
-                    type: 'GAME_END',
-                    timestamp: Date.now(),
-                    description: 'El partido ha finalizado.',
-                    payload: {
-                        quarter: draft.currentQuarter,
-                        gameClock: draft.gameClock,
-                        homeScore: draft.homeTeam.stats.score,
-                        awayScore: draft.awayTeam.stats.score,
-                    },
-                };
-                draft.gameLog.push(endAction);
-                draft.status = 'FINISHED';
-                draft.clockIsRunning = false;
-             });
-             return finalState;
-        }
-
-        case 'REOPEN_GAME': {
-            if (!isFullGamePayload(action.payload)) return state;
-            const gameToReopen: Game = action.payload;
-            
-            // Re-establish the full game state from payload
-            let nextState = produce(gameToReopen, draft => {
-                draft.status = 'IN_PROGRESS';
-                draft.clockIsRunning = false;
-
-                // Remove the GAME_END action from the log
-                const gameEndIndex = draft.gameLog.findIndex(a => a.type === 'GAME_END');
-                if (gameEndIndex > -1) {
-                    draft.gameLog.splice(gameEndIndex, 1);
-                }
-            });
-
-            // Recalculate to ensure everything is consistent after removing the end action
-            return recalculateGameStateFromLog(nextState, nextState.gameLog);
-        }
-        
-        case 'UNDO_LAST_ACTION': {
-            if (state.gameLog.length === 0) return state;
-            
-            // Recalculate from a clean slate using baseGame as the source of truth for settings/rosters
-            const newState = createInitialGame();
-            Object.assign(newState, {
-                id: state.id,
-                date: state.date,
-                settings: baseGame.settings,
-                homeTeam: { ...baseGame.homeTeam },
-                awayTeam: { ...baseGame.awayTeam },
-            });
-
-            return produce(newState, draft => {
-                const newLog = state.gameLog.slice(0, -1);
-                const recalculatedState = recalculateGameStateFromLog(draft as Game, newLog);
-                Object.assign(draft, recalculatedState);
-                draft.gameLog = newLog;
-            });
-        }
-        default:
-             return state;
-    }
-  }
 
   const [game, dispatch] = useReducer(gameReducer, baseGame);
   
@@ -934,12 +925,16 @@ export default function LiveGamePage() {
   };
   
     const formatActionTime = (action: GameAction) => {
-      const payload = 'payload' in action ? action.payload : {};
-      if (!('quarter' in payload) || !('gameClock' in payload)) return '';
-      const mins = Math.floor(payload.gameClock / 60).toString().padStart(2, '0');
-      const secs = (payload.gameClock % 60).toString().padStart(2, '0');
-      return `P${payload.quarter} ${mins}:${secs} (${payload.homeScore} - ${payload.awayScore})`;
-  }
+        const payload = ('payload' in action && typeof action.payload === 'object' && action.payload !== null) ? action.payload : {};
+        const quarter = 'quarter' in payload ? payload.quarter : game.currentQuarter;
+        const gameClock = 'gameClock' in payload ? payload.gameClock : 0;
+        const homeScore = 'homeScore' in payload ? payload.homeScore : 0;
+        const awayScore = 'awayScore' in payload ? payload.awayScore : 0;
+    
+        const mins = Math.floor(gameClock / 60).toString().padStart(2, '0');
+        const secs = (gameClock % 60).toString().padStart(2, '0');
+        return `P${quarter} ${mins}:${secs} (${homeScore} - ${awayScore})`;
+    }
 
   const handleExportPlayByPlay = () => {
     if (game.gameLog.length === 0) return;
